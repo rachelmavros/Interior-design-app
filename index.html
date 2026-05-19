@@ -132,6 +132,34 @@
     .empty-state { grid-column: 1/-1; text-align: center; padding: 3rem; color: #bbb; font-size: 14px; }
     .empty-state i { font-size: 36px; display: block; margin-bottom: 10px; }
 
+    /* Loading overlay */
+    .loading-overlay {
+      display: none; position: fixed; inset: 0; z-index: 999;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(4px);
+      flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    }
+    .loading-overlay.active { display: flex; }
+    .loading-spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #e5e5e5; border-top-color: #1a1a1a;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    .loading-text { font-size: 14px; color: #555; font-weight: 500; }
+    .loading-sub { font-size: 12px; color: #aaa; }
+
+    /* Filter bar */
+    .filter-bar { display: none; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+    .filter-bar.visible { display: flex; }
+    .filter-label { font-size: 11px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: 0.6px; white-space: nowrap; }
+    .filter-chip {
+      font-size: 12px; padding: 4px 12px; border-radius: 20px;
+      border: 1px solid #e0e0e0; background: #fff; color: #555;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .filter-chip:hover { border-color: #aaa; }
+    .filter-chip.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+    .filter-divider { width: 1px; background: #eee; height: 20px; margin: 0 2px; }
+
     .footer-note {
       font-size: 12px; color: #ccc; text-align: center;
       margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #eee; line-height: 1.7;
@@ -197,7 +225,26 @@
       <div class="products-title">Visually similar products</div>
       <div class="products-sub" id="products-sub"></div>
     </div>
+    <!-- Filter bar -->
+    <div class="filter-bar" id="filter-bar">
+      <span class="filter-label">Price</span>
+      <button class="filter-chip active" onclick="setPriceFilter('all', this)">All</button>
+      <button class="filter-chip" onclick="setPriceFilter('under50', this)">Under $50</button>
+      <button class="filter-chip" onclick="setPriceFilter('50-100', this)">$50–100</button>
+      <button class="filter-chip" onclick="setPriceFilter('100-250', this)">$100–250</button>
+      <button class="filter-chip" onclick="setPriceFilter('250plus', this)">$250+</button>
+      <div class="filter-divider"></div>
+      <span class="filter-label">Retailer</span>
+      <div id="retailer-chips"></div>
+    </div>
     <div class="products-grid" id="products-grid"></div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loading-text">Uploading image...</div>
+    <div class="loading-sub">This takes a few seconds</div>
   </div>
 
   <div class="footer-note">
@@ -324,10 +371,15 @@
     const sx = originalImage.width  / roomCanvas.width;
     const sy = originalImage.height / roomCanvas.height;
     const cc = document.createElement('canvas');
-    cc.width  = Math.round(w*sx);
-    cc.height = Math.round(h*sy);
-    cc.getContext('2d').drawImage(originalImage, Math.round(x*sx), Math.round(y*sy), cc.width, cc.height, 0, 0, cc.width, cc.height);
-    const dataUrl = cc.toDataURL('image/jpeg', 0.92);
+    // Image compression: cap at 1200px on longest side
+    const rawW = Math.round(w*sx);
+    const rawH = Math.round(h*sy);
+    const maxPx = 1200;
+    const compScale = Math.min(1, maxPx / Math.max(rawW, rawH));
+    cc.width  = Math.round(rawW * compScale);
+    cc.height = Math.round(rawH * compScale);
+    cc.getContext('2d').drawImage(originalImage, Math.round(x*sx), Math.round(y*sy), rawW, rawH, 0, 0, cc.width, cc.height);
+    const dataUrl = cc.toDataURL('image/jpeg', 0.7); // compressed quality
     croppedBase64 = dataUrl.split(',')[1];
 
     document.getElementById('crop-preview-img').src = dataUrl;
@@ -337,12 +389,39 @@
     setStatus('Item selected — click Search to find visually similar products.');
   }
 
-  // ── Lens search via Netlify function ────────────────────
+  // ── Loading overlay ─────────────────────────────────────
+  const loadingStages = ['Uploading image...', 'Scanning with Google Lens...', 'Finding products...', 'Comparing matches...'];
+  let loadingInterval = null;
+
+  function showLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    const text = document.getElementById('loading-text');
+    overlay.classList.add('active');
+    let i = 0;
+    text.textContent = loadingStages[0];
+    loadingInterval = setInterval(() => {
+      i = Math.min(i + 1, loadingStages.length - 1);
+      text.textContent = loadingStages[i];
+    }, 1200);
+  }
+
+  function hideLoading() {
+    clearInterval(loadingInterval);
+    document.getElementById('loading-overlay').classList.remove('active');
+  }
+
+  // ── Lens search via Vercel function ─────────────────────
+  let allProducts = [];
+  let activePriceFilter = 'all';
+  let activeRetailers = new Set();
+
   async function searchWithLens() {
     if (!croppedBase64) return;
     document.getElementById('search-btn').disabled = true;
     document.getElementById('products-section').style.display = 'none';
-    setStatus('Uploading image and searching Google Lens...', true);
+    document.getElementById('filter-bar').classList.remove('visible');
+    setStatus('');
+    showLoading();
 
     try {
       const res = await fetch('/api/lens-search', {
@@ -357,15 +436,85 @@
       const { products } = data;
       if (!products || !products.length) throw new Error('No results returned from Google Lens');
 
+      allProducts = products;
+      activePriceFilter = 'all';
+      activeRetailers = new Set();
+      buildRetailerChips(products);
       document.getElementById('products-sub').textContent = `${products.length} visually similar products found`;
-      renderProducts(products);
+      document.getElementById('filter-bar').classList.add('visible');
+      applyFilters();
       setStatus('');
     } catch(e) {
       console.error(e);
       setStatus(`Error: ${e.message}`);
     }
 
+    hideLoading();
     document.getElementById('search-btn').disabled = false;
+  }
+
+  // ── Price filters ────────────────────────────────────────
+  function setPriceFilter(range, el) {
+    activePriceFilter = range;
+    document.querySelectorAll('#filter-bar .filter-chip').forEach(c => {
+      if (['all','under50','50-100','100-250','250plus'].some(r => c.getAttribute('onclick')?.includes(r))) {
+        c.classList.remove('active');
+      }
+    });
+    el.classList.add('active');
+    applyFilters();
+  }
+
+  function parsePrice(priceStr) {
+    if (!priceStr) return null;
+    const n = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
+    return isNaN(n) ? null : n;
+  }
+
+  function priceInRange(priceStr, range) {
+    const p = parsePrice(priceStr);
+    if (range === 'all') return true;
+    if (p === null) return false;
+    if (range === 'under50')  return p < 50;
+    if (range === '50-100')   return p >= 50 && p <= 100;
+    if (range === '100-250')  return p > 100 && p <= 250;
+    if (range === '250plus')  return p > 250;
+    return true;
+  }
+
+  // ── Retailer filters ─────────────────────────────────────
+  function buildRetailerChips(products) {
+    const retailers = [...new Set(products.map(p => p.source).filter(Boolean))];
+    const container = document.getElementById('retailer-chips');
+    container.innerHTML = '';
+    retailers.forEach(r => {
+      const btn = document.createElement('button');
+      btn.className = 'filter-chip';
+      btn.textContent = r;
+      btn.onclick = () => toggleRetailer(r, btn);
+      container.appendChild(btn);
+    });
+  }
+
+  function toggleRetailer(retailer, el) {
+    if (activeRetailers.has(retailer)) {
+      activeRetailers.delete(retailer);
+      el.classList.remove('active');
+    } else {
+      activeRetailers.add(retailer);
+      el.classList.add('active');
+    }
+    applyFilters();
+  }
+
+  // ── Apply all filters ────────────────────────────────────
+  function applyFilters() {
+    let filtered = allProducts.filter(p => priceInRange(p.price, activePriceFilter));
+    if (activeRetailers.size > 0) {
+      filtered = filtered.filter(p => activeRetailers.has(p.source));
+    }
+    renderProducts(filtered);
+    document.getElementById('products-section').style.display = 'block';
   }
 
   function setStatus(msg, loading) {
