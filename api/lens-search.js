@@ -30,11 +30,15 @@ export default async function handler(req, res) {
 
     const imgbbData = await imgbbRes.json();
 
+    console.log('imgBB response:', JSON.stringify(imgbbData, null, 2));
+
     const publicUrl = imgbbData?.data?.url;
 
     if (!publicUrl) {
       throw new Error('imgBB upload failed');
     }
+
+    console.log('Public image URL:', publicUrl);
 
     const lensParams = new URLSearchParams({
       engine: 'google_lens',
@@ -50,10 +54,20 @@ export default async function handler(req, res) {
 
     const lensData = await lensRes.json();
 
+    console.log('FULL GOOGLE LENS RESPONSE:');
+    console.log(JSON.stringify(lensData, null, 2));
+
     const shopping = lensData.shopping_results || [];
     const visual = lensData.visual_matches || [];
 
     const results = [...shopping, ...visual].slice(0, 8);
+
+    if (!results.length) {
+      return res.status(200).json({
+        error: 'No results returned from Google Lens',
+        debug: lensData
+      });
+    }
 
     const products = results.map((r) => ({
       name: r.title || 'Product',
@@ -68,7 +82,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error('LENS SEARCH ERROR:', error);
 
     return res.status(500).json({
       error: error.message || 'Internal server error'
