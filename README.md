@@ -3,15 +3,15 @@
 Snap a photo of your room, clear it out, try new pieces (AI-designed or real products), and shop everything you see.
 
 - **Studio** (`/studio/[id]`) — paint a mask over part of your photo, then:
-  - **Clear out** furniture (AI fills in the floor/walls behind it)
-  - **Add with AI** — describe a piece + pick a style; it's placed with real perspective & shadows. **Smart fit** lets the piece extend past sloppy paint, keeping only pixels the AI actually changed
+  - **Clear out** — a magic eraser: describe what's going and what belongs behind it, and the AI removes it and rebuilds hidden cabinets, floors and walls
+  - **Add with AI** — describe a piece + pick a style; it's placed with real perspective & shadows
   - **Your own piece** — upload a photo or paste a product/image link, box the item, and drop it in (great for artwork)
   - **Move anything** — with the Move tool, tap any piece you added (AI or product) to lift it out of the photo and drag it; what was behind it is restored
   - **Products** — search real stores, cut the product out, drag/resize/rotate it into your room, then **Blend with AI** for matching light and shadows (or place as-is for free). Recently viewed and saved items (with folders) live here too
   - **Shop** — box anything to find it with Google Lens; every AI or placed piece is listed with prices and a running total
-  - History strip, undo/redo, before/after compare, download
+  - History strip that never loses a version (editing an older one branches), undo/redo, before/after compare, download
 - **Shop a photo** (`/shop`) — the original Lens flow: upload any photo, box an item, get matches.
-- Results everywhere have sort (price, rating, reviews), filters (price range, rating, retailer, in stock), pagination, and "search more stores".
+- Results everywhere have sort (price, rating, reviews), filters (price range, rating, retailer, in stock), pagination, and "search more stores". Lens results keep Facebook Marketplace listings, labeled as such.
 - Projects are saved in the browser (IndexedDB). No accounts.
 
 ## How walls stay untouched

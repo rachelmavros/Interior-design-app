@@ -166,14 +166,14 @@ function edgeRadii(w: number, h: number) {
 }
 
 /** Image + OpenAI-format mask (transparent = editable) at the request size. */
-export async function buildEditInputs(base: Drawable, mask: HTMLCanvasElement, model: string, extraGrow = 0) {
+export async function buildEditInputs(base: Drawable, mask: HTMLCanvasElement, model: string) {
   const { W, H } = dims(base);
   const send = pickSendSize(W, H, model);
   const { grow, feather } = edgeRadii(W, H);
 
   // The model is allowed to repaint slightly beyond the user's mask so the
   // feathered seam we composite later lands on generated pixels.
-  const grown = alphaToCanvas(dilate(readAlpha(mask), W, H, grow + feather * 2 + extraGrow), W, H);
+  const grown = alphaToCanvas(dilate(readAlpha(mask), W, H, grow + feather * 2), W, H);
 
   const img = makeCanvas(send.w, send.h);
   const gi = ctx2d(img);
@@ -216,13 +216,8 @@ function colorGains(base: ImageData, result: ImageData, keep: Float32Array) {
   return s.map((v, c) => Math.min(1.15, Math.max(0.87, v / Math.max(1, r[c]))));
 }
 
-/**
- * Pastes the generated pixels back over the original, but only inside the
- * user's mask (feathered). With `smartGrow`, pixels the model actually changed
- * up to that far outside the mask are kept too, so a piece that needed more
- * room than was painted isn't cut off; untouched surroundings stay original.
- */
-export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HTMLCanvasElement, smartGrow = 0) {
+/** Pastes the generated pixels back over the original, only inside the user's mask (feathered). */
+export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HTMLCanvasElement) {
   const { W, H } = dims(base);
   const { grow, feather } = edgeRadii(W, H);
 
@@ -238,26 +233,10 @@ export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HT
   const resData = gl.getImageData(0, 0, W, H);
 
   const userMask = readAlpha(mask);
-  const sentRegion = dilate(userMask, W, H, grow + feather * 2 + smartGrow);
+  const sentRegion = dilate(userMask, W, H, grow + feather * 2);
   const gains = colorGains(baseData, resData, sentRegion);
 
   const alpha = blurAlpha(dilate(userMask, W, H, grow), W, H, feather);
-  if (smartGrow > 0) {
-    const changed = new Float32Array(alpha.length);
-    for (let i = 0; i < changed.length; i++) {
-      if (!sentRegion[i]) continue;
-      const p = i * 4;
-      let d = 0;
-      for (let c = 0; c < 3; c++) d = Math.max(d, Math.abs(resData.data[p + c] * gains[c] - baseData.data[p + c]));
-      changed[i] = Math.min(1, Math.max(0, (d - 22) / 40));
-    }
-    // Close small gaps and drop isolated specks (JPEG noise), then soften the edge.
-    const closed = blurAlpha(changed, W, H, 3);
-    for (let i = 0; i < closed.length; i++) closed[i] = closed[i] > 0.35 ? 1 : 0;
-    const spill = blurAlpha(closed, W, H, Math.max(2, feather >> 1));
-    for (let i = 0; i < alpha.length; i++) if (sentRegion[i] && spill[i] > alpha[i]) alpha[i] = spill[i];
-  }
-
   for (let i = 0; i < alpha.length; i++) {
     const p = i * 4;
     const a = alpha[i];
@@ -276,8 +255,8 @@ export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HT
  * room's context stays visible) to give the model more pixels for the piece.
  * Returns null when the full image should be used.
  */
-export function focusRegion(b: Box, W: number, H: number, extra = 0): Box | null {
-  const s = Math.min(1, Math.max(0.5, Math.max((b.w + extra * 2) / W, (b.h + extra * 2) / H) * 2.2));
+export function focusRegion(b: Box, W: number, H: number): Box | null {
+  const s = Math.min(1, Math.max(0.5, Math.max(b.w / W, b.h / H) * 2.2));
   if (s > 0.85) return null;
   const cw = Math.round(W * s);
   const ch = Math.round(H * s);
