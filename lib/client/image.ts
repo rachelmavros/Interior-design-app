@@ -273,11 +273,12 @@ export function padBox(b: Box, pad: number, W: number, H: number): Box {
  * Flood-fill that background from the image border and make it transparent.
  * Returns null when the border isn't uniform enough to trust.
  */
-export function removeBackground(img: HTMLImageElement, tolerance = 38): HTMLCanvasElement | null {
+export function removeBackground(img: Drawable, tolerance = 38): HTMLCanvasElement | null {
   const maxSide = 1024;
-  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-  const W = Math.round(img.naturalWidth * scale);
-  const H = Math.round(img.naturalHeight * scale);
+  const d0 = dims(img);
+  const scale = Math.min(1, maxSide / Math.max(d0.W, d0.H));
+  const W = Math.round(d0.W * scale);
+  const H = Math.round(d0.H * scale);
   const c = makeCanvas(W, H);
   const g = ctx2d(c);
   g.drawImage(img, 0, 0, W, H);

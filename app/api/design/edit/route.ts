@@ -1,5 +1,6 @@
 import { guard, isMock, json } from '@/lib/server/guard';
 import { mockEditSvg } from '@/lib/server/mock';
+import { allowedModels, defaultModel } from '@/lib/server/models';
 import { buildPrompt } from '@/lib/prompts';
 import type { EditMode, EditParams } from '@/lib/types';
 
@@ -52,6 +53,10 @@ export async function POST(req: Request) {
     return json({ error: 'Describe what you want first' }, 400);
   }
 
+  const requested = String(form.get('model') || '');
+  const model = requested || defaultModel();
+  if (!allowedModels().includes(model)) return json({ error: 'That image model isn’t enabled' }, 400);
+
   const prompt = buildPrompt(params);
 
   if (isMock()) {
@@ -64,7 +69,6 @@ export async function POST(req: Request) {
 
   const key = process.env.OPENAI_API_KEY;
   if (!key) return json({ error: 'OPENAI_API_KEY is not configured' }, 500);
-  const model = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
 
   const fields: Record<string, string> = {
     model,

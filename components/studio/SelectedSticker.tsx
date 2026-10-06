@@ -20,12 +20,14 @@ import {
   useStudio,
 } from '@/lib/client/studio';
 import { formatPrice } from '../ProductCard';
+import { useEditCost } from './AiSettings';
 
 export function SelectedSticker() {
   const selected = useStudio((s) => s.selected);
   const stickers = useStudio((s) => s.project?.stickers ?? []);
   const urls = useStudio((s) => s.urls);
   const busy = useStudio((s) => s.busy);
+  const cost = useEditCost();
   const s = stickers.find((x) => x.id === selected);
   if (!s) return null;
   const hasCutout = s.blobId !== s.origBlobId;
@@ -48,7 +50,7 @@ export function SelectedSticker() {
       </div>
       <div className="selected-actions">
         <button className="btn btn-accent btn-sm" disabled={!!busy} onClick={() => blendSticker(s.id)} title="Re-render with your room’s lighting, perspective and shadows">
-          <IconSparkles size={15} /> Blend with AI
+          <IconSparkles size={15} /> Blend with AI {cost && <span className="btn-cost">{cost}</span>}
         </button>
         <button className="btn btn-outline btn-sm" disabled={!!busy} onClick={() => flattenSticker(s.id)} title="Commit as-is, no AI">
           <IconCheck size={15} /> Place as-is

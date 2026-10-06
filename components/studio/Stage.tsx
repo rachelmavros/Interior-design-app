@@ -58,6 +58,7 @@ export function Stage() {
     return () => ro.disconnect();
   }, [W, H]);
 
+  const showStage = fit.w > 0 && Boolean(base);
   useEffect(() => {
     const host = maskHost.current;
     if (!host || !mask) return;
@@ -65,7 +66,7 @@ export function Stage() {
     return () => {
       if (mask.parentNode === host) host.removeChild(mask);
     };
-  }, [mask]);
+  }, [mask, showStage]);
 
   useEffect(() => {
     const c = overlayRef.current;
@@ -214,7 +215,7 @@ export function Stage() {
 
   return (
     <div className="stage-wrap" ref={wrapRef} style={{ '--ar': `${W} / ${H}` } as React.CSSProperties}>
-      {fit.w > 0 && base && (
+      {showStage && base && (
         <div className={`stage ${busy ? 'shimmer' : ''}`} style={{ width: fit.w, height: fit.h }}>
           <img className="stage-img" src={base.src} alt="Your room" draggable={false} />
           <div className="mask-host" ref={maskHost} style={{ display: compare ? 'none' : undefined }} />

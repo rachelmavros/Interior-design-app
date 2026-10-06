@@ -15,7 +15,7 @@ export interface Product {
   reviews?: number | null;
   inStock?: boolean | null;
   delivery?: string;
-  origin: 'lens' | 'shopping';
+  origin: 'lens' | 'shopping' | 'link' | 'upload';
 }
 
 export interface ProductSearchResponse {
@@ -35,7 +35,10 @@ export interface EditParams {
 }
 
 export interface AppConfig {
+  /** Default image model; `models` are the ones visitors may pick. */
   model: string;
+  models: string[];
+  amazon: boolean;
   mock: boolean;
   accessRequired: boolean;
   missing: string[];
