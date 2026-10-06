@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   if (!MODES.includes(params.mode)) return json({ error: 'Unknown edit mode' }, 400);
   if (!QUALITIES.includes(quality)) return json({ error: 'Unknown quality' }, 400);
   if (!/^(auto|\d{3,4}x\d{3,4})$/.test(size)) return json({ error: 'Invalid size' }, 400);
-  if ((params.text?.length ?? 0) > 600 || (params.behind?.length ?? 0) > 600) {
+  if ((params.text?.length ?? 0) > 600) {
     return json({ error: 'Description is too long' }, 400);
   }
   if (params.mode === 'add' && !params.text?.trim()) {
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
       });
     } catch (e) {
       console.error('openai fetch', e);
-      return json({ error: 'The image service took too long. Try again, or use Draft quality.' }, 504);
+      return json({ error: 'The image took too long to generate. Try Standard or Draft quality, or the Balanced model.' }, 504);
     }
 
     const data = await res.json().catch(() => ({}));

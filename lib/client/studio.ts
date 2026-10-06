@@ -35,9 +35,11 @@ import {
   type Sticker,
 } from './db';
 import type { Box, EditParams, Product } from '../types';
-import { DEFAULT_MODEL, DEFAULT_QUALITY, type Quality } from '../models';
+import { DEFAULT_MODEL, DEFAULT_QUALITY, MODE_DEFAULTS, type AiMode, type Quality } from '../models';
 
-export type { Quality };
+export type { AiMode, Quality };
+
+type AiPrefs = Record<AiMode, { model: string; quality: Quality }>;
 
 export type Tool = 'move' | 'brush' | 'eraser' | 'rect' | 'lasso' | 'shop';
 export type Tab = 'design' | 'products' | 'shop';
@@ -72,6 +74,8 @@ interface State {
   brush: number;
   tab: Tab;
   quality: Quality;
+  aiMode: AiMode;
+  aiPrefs: AiPrefs;
   selected: string | null;
   busy: { label: string; startedAt: number } | null;
   compare: boolean;
@@ -96,6 +100,8 @@ const initial: State = {
   brush: 36,
   tab: 'design',
   quality: DEFAULT_QUALITY,
+  aiMode: 'clear',
+  aiPrefs: MODE_DEFAULTS,
   selected: null,
   busy: null,
   compare: false,
@@ -126,21 +132,32 @@ function reveal(selector: '.stage-wrap' | '.studio-side') {
 
 // ── Preferences ───────────────────────────────────────────
 
-const PREFS_KEY = 'rts-ai-prefs';
+const PREFS_KEY = 'rts-ai-prefs-v2';
 
-function readPrefs(): { model?: string; quality?: Quality } {
+function readPrefs(allowed: string[], fallback: string): AiPrefs {
+  let stored: Partial<AiPrefs> = {};
   try {
-    return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
-  } catch {
-    return {};
-  }
+    stored = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+  } catch {}
+  const pick = (mode: AiMode) => {
+    const want = { ...MODE_DEFAULTS[mode], ...stored[mode] };
+    return { model: allowed.includes(want.model) ? want.model : fallback, quality: want.quality };
+  };
+  return { clear: pick('clear'), add: pick('add') };
+}
+
+/** Which task the AI settings panel is showing; each task remembers its own model and quality. */
+export function setAiMode(aiMode: AiMode) {
+  const p = get().aiPrefs[aiMode];
+  set({ aiMode, model: p.model, quality: p.quality });
 }
 
 export function setAiPrefs(patch: { model?: string; quality?: Quality }) {
-  set(patch);
+  const { aiMode, aiPrefs } = get();
+  const next = { ...aiPrefs, [aiMode]: { ...aiPrefs[aiMode], ...patch } };
+  set({ ...patch, aiPrefs: next });
   try {
-    const { model, quality } = get();
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ model, quality }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify(next));
   } catch {}
 }
 
@@ -212,13 +229,15 @@ export async function loadStudio(id: string) {
     }
     const base = await loadImage(urls[project.versions[project.current].id]);
     if (token !== loadToken) return;
-    const prefs = readPrefs();
+    const aiPrefs = readPrefs(config.models, config.model);
     set({
       project,
       urls,
       models: config.models,
-      model: prefs.model && config.models.includes(prefs.model) ? prefs.model : config.model,
-      quality: prefs.quality || DEFAULT_QUALITY,
+      aiPrefs,
+      aiMode: 'clear',
+      model: aiPrefs.clear.model,
+      quality: aiPrefs.clear.quality,
       base,
       mask: makeCanvas(project.width, project.height),
     });
@@ -371,14 +390,14 @@ function editLabel(p: EditParams) {
 }
 
 async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: EditParams, reference?: Blob) {
-  const { model, quality } = get();
+  const { model, quality } = get().aiPrefs[params.mode === 'clear' ? 'clear' : 'add'];
   const { W, H } = dims(source);
   const b = maskBounds(mask)!;
   const region = focusRegion(b, W, H);
   const src = region ? cropCanvas(source, region) : source;
   const m = region ? cropCanvas(mask, region) : mask;
 
-  const inputs = await buildEditInputs(src, m, model);
+  const inputs = await buildEditInputs(src, m, model, quality);
   const resultBlob = await designEdit({ ...inputs, quality, model, params, reference });
   const result = await blobToImage(resultBlob);
   const patch = compositeEdit(src, result, m);

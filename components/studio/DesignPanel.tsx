@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { IconBrush, IconPencil, IconSparkles, IconWand } from '@tabler/icons-react';
-import { runEdit, toast, useStudio } from '@/lib/client/studio';
+import { runEdit, setAiMode, toast, useStudio } from '@/lib/client/studio';
 import { AiSettings, useEditCost } from './AiSettings';
 import { ImportItem } from './ImportItem';
 import { QUICK_ITEMS, STYLES } from '@/lib/prompts';
@@ -12,7 +12,7 @@ type Mode = 'clear' | 'add' | 'own';
 const MODES: { id: Mode; label: string }[] = [
   { id: 'clear', label: 'Clear out' },
   { id: 'add', label: 'Add with AI' },
-  { id: 'own', label: 'Your own piece' },
+  { id: 'own', label: 'Add your own item' },
 ];
 
 export function DesignPanel() {
@@ -22,7 +22,6 @@ export function DesignPanel() {
   const tool = useStudio((s) => s.tool);
   const [mode, setMode] = useState<Mode>('clear');
   const [removeText, setRemoveText] = useState('');
-  const [behind, setBehind] = useState('');
   const [item, setItem] = useState('');
   const [style, setStyle] = useState<string | undefined>();
   const itemRef = useRef<HTMLTextAreaElement>(null);
@@ -43,7 +42,7 @@ export function DesignPanel() {
       itemRef.current?.focus();
       return;
     }
-    if (mode === 'clear') runEdit({ mode: 'clear', text: removeText, behind });
+    if (mode === 'clear') runEdit({ mode: 'clear', text: removeText });
     if (mode === 'add') runEdit({ mode: 'add', text: item, style });
   }
 
@@ -51,7 +50,16 @@ export function DesignPanel() {
     <div className="stack">
       <div className="segmented" role="tablist" aria-label="Edit type">
         {MODES.map((m) => (
-          <button key={m.id} className={mode === m.id ? 'on' : ''} onClick={() => setMode(m.id)} role="tab" aria-selected={mode === m.id}>
+          <button
+            key={m.id}
+            className={mode === m.id ? 'on' : ''}
+            onClick={() => {
+              setMode(m.id);
+              if (m.id !== 'own') setAiMode(m.id);
+            }}
+            role="tab"
+            aria-selected={mode === m.id}
+          >
             {m.label}
           </button>
         ))}
@@ -88,28 +96,17 @@ export function DesignPanel() {
                 <IconSparkles size={16} />
                 <span>
                   <strong>Describe it for much better results</strong>
-                  <span className="tiny muted">The AI erases and rebuilds far more accurately when you tell it what’s going and what belongs behind it.</span>
+                  <span className="tiny muted">The AI erases and rebuilds far more accurately when you say what’s going and what belongs behind it.</span>
                 </span>
               </div>
               <div>
-                <label className="label" htmlFor="remove">What are you removing?</label>
-                <input
+                <label className="label" htmlFor="remove">What are you removing, and what should be behind it?</label>
+                <textarea
                   id="remove"
-                  className="input"
+                  className="textarea"
                   value={removeText}
                   onChange={(e) => setRemoveText(e.target.value)}
-                  placeholder="e.g. the kitchen island and bar stools"
-                  maxLength={600}
-                />
-              </div>
-              <div>
-                <label className="label" htmlFor="behind">What should fill the gap?</label>
-                <input
-                  id="behind"
-                  className="input"
-                  value={behind}
-                  onChange={(e) => setBehind(e.target.value)}
-                  placeholder="e.g. continue the lower cabinets and wood floor behind it"
+                  placeholder="e.g. remove the kitchen island and bar stools, and continue the lower cabinets and wood floor behind them"
                   maxLength={600}
                 />
               </div>

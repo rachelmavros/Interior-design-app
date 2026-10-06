@@ -58,7 +58,7 @@ export function ImportItem() {
 
   return (
     <div className="card">
-      <h3>Add your own piece</h3>
+      <h3>Add your own item</h3>
       <p className="tiny muted" style={{ margin: '2px 0 10px' }}>
         Artwork, a find from a store, a family heirloom — upload a photo or paste a link, select the item, and place it in your room.
       </p>
