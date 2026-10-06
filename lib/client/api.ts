@@ -102,6 +102,9 @@ export async function designEdit(opts: {
   const res = await call('/api/design/edit', { method: 'POST', body: fd });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
+    if (!data.error && (res.status === 504 || res.status === 502)) {
+      throw new Error('The image took too long to generate. Try Standard or Draft quality, or the Balanced model.');
+    }
     throw new Error(data.error || `Edit failed (${res.status})`);
   }
   return res.blob();

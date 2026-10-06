@@ -33,6 +33,14 @@ export const IMAGE_MODELS: ImageModel[] = [
 export const DEFAULT_MODEL = 'gpt-image-1-mini';
 export const DEFAULT_QUALITY: Quality = 'low';
 
+export type AiMode = 'clear' | 'add';
+
+/** Starting picks per task, from real testing: Balanced rebuilds hidden areas best; Premium Draft places pieces best. */
+export const MODE_DEFAULTS: Record<AiMode, { model: string; quality: Quality }> = {
+  clear: { model: 'gpt-image-1.5', quality: 'medium' },
+  add: { model: 'gpt-image-2', quality: 'low' },
+};
+
 export function estimateCost(modelId: string, quality: Quality, square: boolean) {
   const m = IMAGE_MODELS.find((x) => x.id === modelId);
   if (!m) return null;

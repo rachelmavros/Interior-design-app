@@ -27,7 +27,7 @@ export function SelectedSticker() {
   const stickers = useStudio((s) => s.project?.stickers ?? []);
   const urls = useStudio((s) => s.urls);
   const busy = useStudio((s) => s.busy);
-  const cost = useEditCost();
+  const cost = useEditCost('add');
   const s = stickers.find((x) => x.id === selected);
   if (!s) return null;
   const hasCutout = s.blobId !== s.origBlobId;

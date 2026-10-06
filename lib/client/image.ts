@@ -146,10 +146,11 @@ export function maskCoverage(mask: HTMLCanvasElement) {
  * Picks a request size that keeps the room's aspect ratio. gpt-image-2 takes
  * arbitrary sizes (multiples of 16); earlier models take three fixed sizes.
  */
-export function pickSendSize(w: number, h: number, model: string) {
+export function pickSendSize(w: number, h: number, model: string, quality?: string) {
   const ratio = w / h;
   if (model.startsWith('gpt-image-2')) {
-    const long = 1536;
+    // Premium at Best quality can run past the server's time limit at full size.
+    const long = quality === 'high' ? 1280 : 1536;
     const r = Math.min(3, Math.max(1 / 3, ratio));
     const sw = r >= 1 ? long : Math.round((long * r) / 16) * 16;
     const sh = r >= 1 ? Math.round(long / r / 16) * 16 : long;
@@ -166,9 +167,9 @@ function edgeRadii(w: number, h: number) {
 }
 
 /** Image + OpenAI-format mask (transparent = editable) at the request size. */
-export async function buildEditInputs(base: Drawable, mask: HTMLCanvasElement, model: string) {
+export async function buildEditInputs(base: Drawable, mask: HTMLCanvasElement, model: string, quality?: string) {
   const { W, H } = dims(base);
-  const send = pickSendSize(W, H, model);
+  const send = pickSendSize(W, H, model, quality);
   const { grow, feather } = edgeRadii(W, H);
 
   // The model is allowed to repaint slightly beyond the user's mask so the

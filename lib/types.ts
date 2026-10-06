@@ -29,11 +29,9 @@ export type EditMode = 'clear' | 'add' | 'blend';
 
 export interface EditParams {
   mode: EditMode;
-  /** clear: what to remove. add/blend: the item. */
+  /** clear: what to remove and what belongs behind it. add/blend: the item. */
   text?: string;
   style?: string;
-  /** clear: what should appear where the removed things were. */
-  behind?: string;
 }
 
 export interface AppConfig {
