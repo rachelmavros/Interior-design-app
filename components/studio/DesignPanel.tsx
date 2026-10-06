@@ -17,12 +17,12 @@ const MODES: { id: Mode; label: string }[] = [
 
 export function DesignPanel() {
   const coverage = useStudio((s) => s.maskCoverage);
-  const smartFit = useStudio((s) => s.smartFit);
   const cost = useEditCost();
   const busy = useStudio((s) => s.busy);
   const tool = useStudio((s) => s.tool);
   const [mode, setMode] = useState<Mode>('clear');
   const [removeText, setRemoveText] = useState('');
+  const [behind, setBehind] = useState('');
   const [item, setItem] = useState('');
   const [style, setStyle] = useState<string | undefined>();
   const itemRef = useRef<HTMLTextAreaElement>(null);
@@ -43,8 +43,8 @@ export function DesignPanel() {
       itemRef.current?.focus();
       return;
     }
-    if (mode === 'clear') runEdit({ mode: 'clear', text: removeText });
-    if (mode === 'add') runEdit({ mode: 'add', text: item, style, smart: smartFit });
+    if (mode === 'clear') runEdit({ mode: 'clear', text: removeText, behind });
+    if (mode === 'add') runEdit({ mode: 'add', text: item, style });
   }
 
   return (
@@ -83,22 +83,40 @@ export function DesignPanel() {
           </div>
 
           {mode === 'clear' && (
-            <>
+            <div className="describe-card">
+              <div className="describe-head">
+                <IconSparkles size={16} />
+                <span>
+                  <strong>Describe it for much better results</strong>
+                  <span className="tiny muted">The AI erases and rebuilds far more accurately when you tell it what’s going and what belongs behind it.</span>
+                </span>
+              </div>
               <div>
-                <label className="label" htmlFor="remove">What are you removing? (optional)</label>
+                <label className="label" htmlFor="remove">What are you removing?</label>
                 <input
                   id="remove"
                   className="input"
                   value={removeText}
                   onChange={(e) => setRemoveText(e.target.value)}
-                  placeholder="e.g. the sofa, coffee table and rug"
+                  placeholder="e.g. the kitchen island and bar stools"
+                  maxLength={600}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="behind">What should fill the gap?</label>
+                <input
+                  id="behind"
+                  className="input"
+                  value={behind}
+                  onChange={(e) => setBehind(e.target.value)}
+                  placeholder="e.g. continue the lower cabinets and wood floor behind it"
+                  maxLength={600}
                 />
               </div>
               <p className="tiny muted">
-                Tip: paint generously over each piece <em>and its shadow</em>. Walls, windows and floors outside your paint are
-                never touched — they’re copied pixel-for-pixel from your photo.
+                Paint generously over each piece <em>and its shadow</em>. Anything outside your paint is never touched.
               </p>
-            </>
+            </div>
           )}
 
           {mode === 'add' && (
@@ -135,20 +153,6 @@ export function DesignPanel() {
                   ))}
                 </div>
               </div>
-              <label className="toggle-row">
-                <input
-                  type="checkbox"
-                  checked={smartFit}
-                  onChange={(e) => useStudio.setState({ smartFit: e.target.checked })}
-                />
-                <span>
-                  <strong>Smart fit</strong>
-                  <span className="tiny muted">
-                    Lets the piece extend a little past your paint when it needs room to look right — handy if you painted too
-                    small or messily.
-                  </span>
-                </span>
-              </label>
             </>
           )}
 

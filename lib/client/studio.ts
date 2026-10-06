@@ -79,7 +79,6 @@ interface State {
   toast: Toast | null;
   model: string;
   models: string[];
-  smartFit: boolean;
 }
 
 const MASK_COLOR = '#ff4f7b';
@@ -104,7 +103,6 @@ const initial: State = {
   toast: null,
   model: DEFAULT_MODEL,
   models: [DEFAULT_MODEL],
-  smartFit: true,
 };
 
 export const useStudio = create<State>(() => initial);
@@ -242,11 +240,9 @@ export function unloadStudio() {
 async function commitVersion(blob: Blob, label: string, item?: Omit<DesignItem, 'id' | 'versionId'>) {
   const p = get().project!;
   const id = await storeBlob(blob);
-  const dropped = p.versions.slice(p.current + 1);
-  dropped.forEach((v) => forgetBlob(v.id));
-  const droppedIds = new Set(dropped.map((v) => v.id));
-  const versions = [...p.versions.slice(0, p.current + 1), { id, label, createdAt: Date.now() }];
-  const items = p.items.filter((i) => !droppedIds.has(i.versionId));
+  // Never discard history: editing from an older version starts a new branch instead.
+  const versions = [...p.versions, { id, label, createdAt: Date.now(), parentId: p.versions[p.current].id }];
+  const items = [...p.items];
   const newItem = item ? { ...item, id: uid(), versionId: id } : undefined;
   if (newItem) items.push(newItem);
   const base = await loadImage(get().urls[id]);
@@ -254,6 +250,27 @@ async function commitVersion(blob: Blob, label: string, item?: Omit<DesignItem, 
   patchProject({ versions, current: versions.length - 1, items }, true);
   return newItem;
 }
+
+export function parentIndex(p: Project, index: number) {
+  const parentId = p.versions[index]?.parentId;
+  if (parentId) return p.versions.findIndex((v) => v.id === parentId);
+  return index - 1;
+}
+
+/** The chain of versions that led to `index`, oldest first. */
+export function lineage(p: Project, index = p.current) {
+  const chain: number[] = [];
+  for (let i = index; i >= 0 && chain.length <= p.versions.length; i = parentIndex(p, i)) chain.unshift(i);
+  return chain;
+}
+
+function latestChild(p: Project, index: number) {
+  for (let j = p.versions.length - 1; j > index; j--) if (parentIndex(p, j) === index) return j;
+  return -1;
+}
+
+export const canUndo = (p: Project) => parentIndex(p, p.current) >= 0;
+export const canRedo = (p: Project) => latestChild(p, p.current) >= 0;
 
 export async function goToVersion(index: number) {
   const p = get().project;
@@ -267,12 +284,19 @@ export function flushSave() {
   if (get().project) persist(true);
 }
 
-export const undo = () => goToVersion((get().project?.current ?? 0) - 1);
-export const redo = () => goToVersion((get().project?.current ?? 0) + 1);
+export function undo() {
+  const p = get().project;
+  if (p) goToVersion(parentIndex(p, p.current));
+}
 
-/** Items stay shoppable only while the version that introduced them is in view. */
+export function redo() {
+  const p = get().project;
+  if (p) goToVersion(latestChild(p, p.current));
+}
+
+/** Items are shoppable while the version that introduced them is part of what's on screen. */
 export function visibleItems(p: Project) {
-  const live = new Set(p.versions.slice(0, p.current + 1).map((v) => v.id));
+  const live = new Set(lineage(p).map((i) => p.versions[i].id));
   return p.items.filter((i) => live.has(i.versionId));
 }
 
@@ -350,15 +374,14 @@ async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: 
   const { model, quality } = get();
   const { W, H } = dims(source);
   const b = maskBounds(mask)!;
-  const smartGrow = params.smart ? Math.round(Math.max(b.w, b.h) * 0.25) : 0;
-  const region = focusRegion(b, W, H, smartGrow);
+  const region = focusRegion(b, W, H);
   const src = region ? cropCanvas(source, region) : source;
   const m = region ? cropCanvas(mask, region) : mask;
 
-  const inputs = await buildEditInputs(src, m, model, smartGrow);
+  const inputs = await buildEditInputs(src, m, model);
   const resultBlob = await designEdit({ ...inputs, quality, model, params, reference });
   const result = await blobToImage(resultBlob);
-  const patch = compositeEdit(src, result, m, smartGrow);
+  const patch = compositeEdit(src, result, m);
   if (!region) return toBlob(patch, 'image/jpeg', 0.93);
 
   const out = makeCanvas(W, H);
@@ -377,7 +400,7 @@ export async function runEdit(params: EditParams) {
     return;
   }
   const project = get().project!;
-  const box = padBox(maskBounds(mask)!, params.smart ? 0.25 : 0.04, project.width, project.height);
+  const box = padBox(maskBounds(mask)!, 0.04, project.width, project.height);
   busy(params.mode === 'clear' ? 'Clearing the space' : 'Designing your piece');
   reveal('.stage-wrap');
   try {
@@ -510,17 +533,17 @@ export async function liftItem(item: DesignItem) {
   const { project, base, busy: isBusy } = get();
   if (!project || !base || isBusy) return;
   const idx = project.versions.findIndex((v) => v.id === item.versionId);
-  if (idx <= 0) return;
+  const parent = parentIndex(project, idx);
+  if (idx <= 0 || parent < 0) return;
   busy('Picking it up');
   try {
     const W = project.width;
     const H = project.height;
     const [before, after] = await Promise.all([
-      loadImage(await urlFor(project.versions[idx - 1].id)),
+      loadImage(await urlFor(project.versions[parent].id)),
       loadImage(await urlFor(item.versionId)),
     ]);
-    // The edit may have touched pixels up to its smart-fit margin beyond the item box.
-    const box = padBox(item.box, 0.3, W, H);
+    const box = padBox(item.box, 0.15, W, H);
     const alpha = changedAlpha(before, after, box);
     const undo = anyChangeAlpha(before, after, box);
 
@@ -589,7 +612,7 @@ export async function liftItem(item: DesignItem) {
 export function itemAt(x: number, y: number): DesignItem | null {
   const p = get().project;
   if (!p) return null;
-  const items = visibleItems(p).filter((i) => p.versions.findIndex((v) => v.id === i.versionId) > 0);
+  const items = visibleItems(p).filter((i) => parentIndex(p, p.versions.findIndex((v) => v.id === i.versionId)) >= 0);
   for (let k = items.length - 1; k >= 0; k--) {
     const b = items[k].box;
     if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return items[k];

@@ -5,6 +5,8 @@ export interface Version {
   id: string;
   label: string;
   createdAt: number;
+  /** Version this one was edited from. Missing on older projects, where it's the previous entry. */
+  parentId?: string;
 }
 
 export interface Sticker {

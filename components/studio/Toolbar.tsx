@@ -16,6 +16,8 @@ import {
   IconRotate2,
 } from '@tabler/icons-react';
 import {
+  canRedo,
+  canUndo,
   clearMask,
   invertMask,
   redo,
@@ -101,13 +103,13 @@ export function Toolbar() {
       >
         <IconColumns2 size={19} />
       </button>
-      <button className="icon-btn" onClick={undo} disabled={project.current === 0 || !!busy} title="Undo edit" aria-label="Undo edit">
+      <button className="icon-btn" onClick={undo} disabled={!canUndo(project) || !!busy} title="Undo edit" aria-label="Undo edit">
         <IconArrowBackUp size={19} />
       </button>
       <button
         className="icon-btn"
         onClick={redo}
-        disabled={project.current >= project.versions.length - 1 || !!busy}
+        disabled={!canRedo(project) || !!busy}
         title="Redo edit"
         aria-label="Redo edit"
       >

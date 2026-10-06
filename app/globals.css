@@ -224,7 +224,8 @@ img { display: block; max-width: 100%; }
 .version img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 8px; }
 .version span { display: block; font-size: 11px; color: var(--ink-2); padding: 3px 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .version.on { border-color: var(--ink); }
-.version.future { opacity: .45; }
+.version.off-path { opacity: .55; }
+.version .branch { font-style: normal; color: var(--accent); }
 
 /* ── Side panel ───────────────────────────────── */
 .tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 8px; flex-shrink: 0; }
@@ -363,10 +364,6 @@ img { display: block; max-width: 100%; }
 .legal ul { padding-left: 20px; }
 
 .needs-paint { box-shadow: inset 0 0 0 1.5px var(--mask); }
-.toggle-row { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-size: 13.5px; }
-.toggle-row input { accent-color: var(--accent); width: 17px; height: 17px; margin-top: 2px; flex-shrink: 0; }
-.toggle-row > span { display: flex; flex-direction: column; gap: 2px; }
-.toggle-row .tiny { font-weight: 400; }
 
 /* ── Saved & recent ───────────────────────────── */
 .pcard { position: relative; }
@@ -380,3 +377,6 @@ img { display: block; max-width: 100%; }
 .folder-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .folder-select { margin-top: 6px; font-size: 12px; padding: 5px 26px 5px 8px; }
 #rooms { scroll-margin-top: calc(var(--header-h) + 16px); }
+.describe-card { display: flex; flex-direction: column; gap: 12px; border: 1.5px solid var(--accent-soft); background: #fffaf6; border-radius: var(--radius); padding: 14px; }
+.describe-head { display: flex; gap: 8px; align-items: flex-start; color: var(--accent); }
+.describe-head > span { display: flex; flex-direction: column; gap: 2px; color: var(--ink); font-size: 13.5px; }

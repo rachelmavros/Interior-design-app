@@ -14,8 +14,8 @@ export function affiliateLink(raw: string | undefined): string {
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return '#';
 
   const host = url.hostname.replace(/^www\./, '');
-  // Google's own product pages aren't merchants; wrapping them earns nothing.
-  if (/(^|\.)google\.[a-z.]+$/.test(host)) return url.toString();
+  // Google's product pages and Facebook Marketplace aren't affiliate merchants; wrapping them earns nothing.
+  if (/(^|\.)(google|facebook)\.[a-z.]+$/.test(host)) return url.toString();
 
   const amazonTag = process.env.AMAZON_ASSOCIATE_TAG;
   if (amazonTag && /(^|\.)amazon\.[a-z.]+$/.test(host)) {

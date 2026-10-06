@@ -32,8 +32,8 @@ export interface EditParams {
   /** clear: what to remove. add/blend: the item. */
   text?: string;
   style?: string;
-  /** add: the painted area is approximate; the piece may extend past it. */
-  smart?: boolean;
+  /** clear: what should appear where the removed things were. */
+  behind?: string;
 }
 
 export interface AppConfig {

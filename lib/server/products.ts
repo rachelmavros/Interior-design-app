@@ -41,7 +41,7 @@ export function normalize(r: Raw, origin: Product['origin'], i: number): Product
     id: `${origin}-${i}-${String(rawLink).slice(-40)}`,
     title: String(r.title),
     link: affiliateLink(rawLink),
-    source: r.source || r.merchant?.name || hostOf(rawLink),
+    source: isMarketplace(rawLink) ? 'Facebook Marketplace' : r.source || r.merchant?.name || hostOf(rawLink),
     sourceIcon: r.source_icon,
     thumbnail: r.serpapi_thumbnail || r.thumbnail,
     image: r.image || r.original || undefined,
@@ -54,6 +54,10 @@ export function normalize(r: Raw, origin: Product['origin'], i: number): Product
     delivery: typeof r.delivery === 'string' ? r.delivery : undefined,
     origin,
   };
+}
+
+function isMarketplace(u: string) {
+  return /facebook\.com\/marketplace/i.test(u);
 }
 
 function hostOf(u: string) {
