@@ -1,7 +1,7 @@
 'use client';
 
-import { IconExternalLink, IconShoppingBagSearch, IconSparkles } from '@tabler/icons-react';
-import { placeProduct, shopItem, useStudio, visibleItems } from '@/lib/client/studio';
+import { IconArrowsMove, IconExternalLink, IconShoppingBagSearch, IconSparkles } from '@tabler/icons-react';
+import { liftItem, placeProduct, shopItem, shopSticker, useStudio, visibleItems } from '@/lib/client/studio';
 import type { DesignItem } from '@/lib/client/db';
 import { ProductResults } from '../ProductResults';
 import { formatPrice } from '../ProductCard';
@@ -12,7 +12,8 @@ export function ShopPanel() {
   const lens = useStudio((s) => s.lens);
   const urls = useStudio((s) => s.urls);
   const items = visibleItems(project);
-  const pending = project.stickers.filter((s) => s.product);
+  const pending = project.stickers.filter((s) => s.product || s.generated);
+  const busy = useStudio((s) => s.busy);
 
   const priced = [...items.map((i) => i.product), ...pending.map((s) => s.product)].filter(
     (p) => p?.price,
@@ -91,6 +92,9 @@ export function ShopPanel() {
                     )}
                   </span>
                 </div>
+                <button className="icon-btn" title="Pick up and move" aria-label={`Move ${i.label}`} disabled={!!busy} onClick={() => liftItem(i)}>
+                  <IconArrowsMove size={17} />
+                </button>
                 {i.product ? (
                   <a className="btn btn-primary btn-sm" href={i.product.link} target="_blank" rel="noopener noreferrer sponsored">
                     Shop <IconExternalLink size={13} />
@@ -108,12 +112,18 @@ export function ShopPanel() {
                 <div className="item-info">
                   <strong>{s.label}</strong>
                   <span className="tiny muted">
-                    {[formatPrice(s.product?.price), s.product?.source, 'not placed yet'].filter(Boolean).join(' · ')}
+                    {[s.generated ? 'AI design' : '', formatPrice(s.product?.price), s.product?.source, 'not placed yet'].filter(Boolean).join(' · ')}
                   </span>
                 </div>
-                <a className="btn btn-primary btn-sm" href={s.product!.link} target="_blank" rel="noopener noreferrer sponsored">
-                  Shop <IconExternalLink size={13} />
-                </a>
+                {s.product ? (
+                  <a className="btn btn-primary btn-sm" href={s.product.link} target="_blank" rel="noopener noreferrer sponsored">
+                    Shop <IconExternalLink size={13} />
+                  </a>
+                ) : (
+                  <button className="btn btn-accent btn-sm" onClick={() => shopSticker(s)}>
+                    Find it
+                  </button>
+                )}
               </div>
             ))}
             {total > 0 && (

@@ -20,7 +20,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 body {
   font-family: var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
@@ -354,13 +354,6 @@ img { display: block; max-width: 100%; }
 .btn-cost { font-size: 12px; font-weight: 600; opacity: .85; background: rgba(255,255,255,.18); padding: 1px 7px; border-radius: 999px; }
 .modal-wide { max-width: 640px; max-height: calc(100dvh - 32px); overflow-y: auto; }
 
-/* ── Style previews ───────────────────────────── */
-.style-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.style-card { border: 1.5px solid var(--line); background: var(--surface); border-radius: 10px; padding: 0; overflow: hidden; cursor: pointer; text-align: left; transition: border-color .12s; }
-.style-card:hover { border-color: var(--ink-2); }
-.style-card.on { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
-.style-card span { display: block; font-size: 11.5px; font-weight: 600; padding: 5px 7px 6px; line-height: 1.2; }
-.style-swatch { display: block; width: 100%; aspect-ratio: 4 / 3; }
 
 /* ── Legal pages ──────────────────────────────── */
 .legal { max-width: 720px; padding-top: 40px; }
@@ -368,3 +361,22 @@ img { display: block; max-width: 100%; }
 .legal h2 { font-size: 18px; margin: 28px 0 8px; }
 .legal p, .legal li { color: var(--ink-2); margin-bottom: 10px; }
 .legal ul { padding-left: 20px; }
+
+.needs-paint { box-shadow: inset 0 0 0 1.5px var(--mask); }
+.toggle-row { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-size: 13.5px; }
+.toggle-row input { accent-color: var(--accent); width: 17px; height: 17px; margin-top: 2px; flex-shrink: 0; }
+.toggle-row > span { display: flex; flex-direction: column; gap: 2px; }
+.toggle-row .tiny { font-weight: 400; }
+
+/* ── Saved & recent ───────────────────────────── */
+.pcard { position: relative; }
+.psave {
+  position: absolute; top: 7px; right: 7px; z-index: 2; width: 32px; height: 32px; border-radius: 50%;
+  border: none; background: rgba(255,255,255,.92); color: var(--ink-2); display: grid; place-items: center;
+  cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+.psave:hover { color: var(--accent); }
+.psave.on { color: var(--accent); }
+.folder-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.folder-select { margin-top: 6px; font-size: 12px; padding: 5px 26px 5px 8px; }
+#rooms { scroll-margin-top: calc(var(--header-h) + 16px); }

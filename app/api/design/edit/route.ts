@@ -6,7 +6,7 @@ import type { EditMode, EditParams } from '@/lib/types';
 
 export const maxDuration = 300;
 
-const MODES: EditMode[] = ['clear', 'add', 'blend', 'custom'];
+const MODES: EditMode[] = ['clear', 'add', 'blend'];
 const QUALITIES = ['low', 'medium', 'high'];
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
   if (!QUALITIES.includes(quality)) return json({ error: 'Unknown quality' }, 400);
   if (!/^(auto|\d{3,4}x\d{3,4})$/.test(size)) return json({ error: 'Invalid size' }, 400);
   if (params.text && params.text.length > 600) return json({ error: 'Description is too long' }, 400);
-  if ((params.mode === 'add' || params.mode === 'custom') && !params.text?.trim()) {
+  if (params.mode === 'add' && !params.text?.trim()) {
     return json({ error: 'Describe what you want first' }, 400);
   }
 

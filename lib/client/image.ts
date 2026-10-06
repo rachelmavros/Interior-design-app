@@ -166,14 +166,14 @@ function edgeRadii(w: number, h: number) {
 }
 
 /** Image + OpenAI-format mask (transparent = editable) at the request size. */
-export async function buildEditInputs(base: Drawable, mask: HTMLCanvasElement, model: string) {
+export async function buildEditInputs(base: Drawable, mask: HTMLCanvasElement, model: string, extraGrow = 0) {
   const { W, H } = dims(base);
   const send = pickSendSize(W, H, model);
   const { grow, feather } = edgeRadii(W, H);
 
   // The model is allowed to repaint slightly beyond the user's mask so the
   // feathered seam we composite later lands on generated pixels.
-  const grown = alphaToCanvas(dilate(readAlpha(mask), W, H, grow + feather * 2), W, H);
+  const grown = alphaToCanvas(dilate(readAlpha(mask), W, H, grow + feather * 2 + extraGrow), W, H);
 
   const img = makeCanvas(send.w, send.h);
   const gi = ctx2d(img);
@@ -216,7 +216,13 @@ function colorGains(base: ImageData, result: ImageData, keep: Float32Array) {
   return s.map((v, c) => Math.min(1.15, Math.max(0.87, v / Math.max(1, r[c]))));
 }
 
-export async function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HTMLCanvasElement) {
+/**
+ * Pastes the generated pixels back over the original, but only inside the
+ * user's mask (feathered). With `smartGrow`, pixels the model actually changed
+ * up to that far outside the mask are kept too, so a piece that needed more
+ * room than was painted isn't cut off; untouched surroundings stay original.
+ */
+export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HTMLCanvasElement, smartGrow = 0) {
   const { W, H } = dims(base);
   const { grow, feather } = edgeRadii(W, H);
 
@@ -232,13 +238,29 @@ export async function compositeEdit(base: Drawable, result: HTMLImageElement, ma
   const resData = gl.getImageData(0, 0, W, H);
 
   const userMask = readAlpha(mask);
-  const sentRegion = dilate(userMask, W, H, grow + feather * 2);
+  const sentRegion = dilate(userMask, W, H, grow + feather * 2 + smartGrow);
   const gains = colorGains(baseData, resData, sentRegion);
 
-  const soft = blurAlpha(dilate(userMask, W, H, grow), W, H, feather);
-  for (let i = 0; i < soft.length; i++) {
+  const alpha = blurAlpha(dilate(userMask, W, H, grow), W, H, feather);
+  if (smartGrow > 0) {
+    const changed = new Float32Array(alpha.length);
+    for (let i = 0; i < changed.length; i++) {
+      if (!sentRegion[i]) continue;
+      const p = i * 4;
+      let d = 0;
+      for (let c = 0; c < 3; c++) d = Math.max(d, Math.abs(resData.data[p + c] * gains[c] - baseData.data[p + c]));
+      changed[i] = Math.min(1, Math.max(0, (d - 22) / 40));
+    }
+    // Close small gaps and drop isolated specks (JPEG noise), then soften the edge.
+    const closed = blurAlpha(changed, W, H, 3);
+    for (let i = 0; i < closed.length; i++) closed[i] = closed[i] > 0.35 ? 1 : 0;
+    const spill = blurAlpha(closed, W, H, Math.max(2, feather >> 1));
+    for (let i = 0; i < alpha.length; i++) if (sentRegion[i] && spill[i] > alpha[i]) alpha[i] = spill[i];
+  }
+
+  for (let i = 0; i < alpha.length; i++) {
     const p = i * 4;
-    const a = soft[i];
+    const a = alpha[i];
     if (a <= 0) continue;
     for (let c = 0; c < 3; c++) {
       const v = Math.min(255, resData.data[p + c] * gains[c]);
@@ -246,7 +268,98 @@ export async function compositeEdit(base: Drawable, result: HTMLImageElement, ma
     }
   }
   go.putImageData(baseData, 0, 0);
-  return toBlob(out, 'image/jpeg', 0.93);
+  return out;
+}
+
+/**
+ * For small masks, edit a zoomed-in crop (at least half the photo, so the
+ * room's context stays visible) to give the model more pixels for the piece.
+ * Returns null when the full image should be used.
+ */
+export function focusRegion(b: Box, W: number, H: number, extra = 0): Box | null {
+  const s = Math.min(1, Math.max(0.5, Math.max((b.w + extra * 2) / W, (b.h + extra * 2) / H) * 2.2));
+  if (s > 0.85) return null;
+  const cw = Math.round(W * s);
+  const ch = Math.round(H * s);
+  const x = Math.round(Math.min(W - cw, Math.max(0, b.x + b.w / 2 - cw / 2)));
+  const y = Math.round(Math.min(H - ch, Math.max(0, b.y + b.h / 2 - ch / 2)));
+  return { x, y, w: cw, h: ch };
+}
+
+export function cropCanvas(src: Drawable, box: Box) {
+  const c = makeCanvas(box.w, box.h);
+  ctx2d(c).drawImage(src, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+  return c;
+}
+
+function erode(a: Float32Array, w: number, h: number, r: number) {
+  return dilate(a.map((v) => 1 - v), w, h, r).map((v) => 1 - v);
+}
+
+/** Keeps the largest connected blob, plus any others at least 15% of its size. */
+function keepMainBlobs(a: Float32Array, w: number, h: number) {
+  const label = new Int32Array(a.length);
+  const sizes: number[] = [0];
+  for (let start = 0; start < a.length; start++) {
+    if (!a[start] || label[start]) continue;
+    const id = sizes.length;
+    let size = 0;
+    const stack = [start];
+    label[start] = id;
+    while (stack.length) {
+      const i = stack.pop()!;
+      size++;
+      const x = i % w;
+      const nb = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w];
+      for (const n of nb) {
+        if (n >= 0 && n < a.length && a[n] && !label[n]) {
+          label[n] = id;
+          stack.push(n);
+        }
+      }
+    }
+    sizes.push(size);
+  }
+  const biggest = Math.max(0, ...sizes);
+  const out = new Float32Array(a.length);
+  for (let i = 0; i < a.length; i++) if (label[i] && sizes[label[i]] >= biggest * 0.15) out[i] = 1;
+  return out;
+}
+
+/**
+ * Alpha mask of what an edit added: pixels inside `box` that differ between
+ * `before` and `after`, cleaned so only the new piece (and its shadow) remain.
+ */
+export function changedAlpha(before: Drawable, after: Drawable, box: Box) {
+  const a = ctx2d(cropCanvas(before, box)).getImageData(0, 0, box.w, box.h).data;
+  const b = ctx2d(cropCanvas(after, box)).getImageData(0, 0, box.w, box.h).data;
+  const { w, h } = box;
+  let m: Float32Array = new Float32Array(w * h);
+  for (let i = 0; i < m.length; i++) {
+    const p = i * 4;
+    const d = Math.max(Math.abs(a[p] - b[p]), Math.abs(a[p + 1] - b[p + 1]), Math.abs(a[p + 2] - b[p + 2]));
+    m[i] = d > 26 ? 1 : 0;
+  }
+  const r = Math.max(3, Math.round(Math.max(w, h) * 0.012));
+  // Opening drops scattered noise where the model redrew the floor; closing fills
+  // holes where the piece happens to match the background color.
+  m = dilate(erode(m, w, h, 2), w, h, 2);
+  m = erode(dilate(m, w, h, r), w, h, r);
+  m = keepMainBlobs(m, w, h);
+  return blurAlpha(m, w, h, 1);
+}
+
+/** Soft mask of every pixel that differs at all between two versions — used to undo an edit locally. */
+export function anyChangeAlpha(before: Drawable, after: Drawable, box: Box) {
+  const a = ctx2d(cropCanvas(before, box)).getImageData(0, 0, box.w, box.h).data;
+  const b = ctx2d(cropCanvas(after, box)).getImageData(0, 0, box.w, box.h).data;
+  const m = new Float32Array(box.w * box.h);
+  for (let i = 0; i < m.length; i++) {
+    const p = i * 4;
+    const d = Math.max(Math.abs(a[p] - b[p]), Math.abs(a[p + 1] - b[p + 1]), Math.abs(a[p + 2] - b[p + 2]));
+    m[i] = d > 4 ? 1 : 0;
+  }
+  return blurAlpha(dilate(m, box.w, box.h, 3), box.w, box.h, 2);
 }
 
 // ── Crops & cutouts ───────────────────────────────────────

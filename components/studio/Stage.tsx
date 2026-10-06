@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  itemAt,
+  liftItem,
   maskChanged,
   maskCtx,
   shopBox,
@@ -20,6 +22,7 @@ const HINTS: Record<string, string> = {
   rect: 'Drag a box to paint an area',
   lasso: 'Draw around an area to paint it',
   shop: 'Drag a box around anything to shop it',
+  move: 'Tap a piece you added to pick it up and move it',
 };
 
 export function Stage() {
@@ -134,6 +137,8 @@ export function Stage() {
     if (busy || compare) return;
     if (tool === 'move') {
       useStudio.setState({ selected: null });
+      const hit = itemAt(toImg(e).x, toImg(e).y);
+      if (hit) liftItem(hit);
       return;
     }
     if (e.button !== 0) return;
@@ -211,7 +216,11 @@ export function Stage() {
   }
 
   const original = urls[project.versions[0].id];
-  const showHint = !compare && !busy && tool !== 'move' && (tool === 'shop' || coverage === 0);
+  const liftable = useStudio((s) => (s.project ? s.project.items.length > 0 : false));
+  const showHint =
+    !compare &&
+    !busy &&
+    (tool === 'move' ? liftable && !selected : tool === 'shop' || coverage === 0);
 
   return (
     <div className="stage-wrap" ref={wrapRef} style={{ '--ar': `${W} / ${H}` } as React.CSSProperties}>

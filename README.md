@@ -4,10 +4,10 @@ Snap a photo of your room, clear it out, try new pieces (AI-designed or real pro
 
 - **Studio** (`/studio/[id]`) — paint a mask over part of your photo, then:
   - **Clear out** furniture (AI fills in the floor/walls behind it)
-  - **Add with AI** — describe a piece + pick a style; it's placed with real perspective & shadows
-  - **Custom** — any masked edit ("paint this wall sage green")
+  - **Add with AI** — describe a piece + pick a style; it's placed with real perspective & shadows. **Smart fit** lets the piece extend past sloppy paint, keeping only pixels the AI actually changed
   - **Your own piece** — upload a photo or paste a product/image link, box the item, and drop it in (great for artwork)
-  - **Products** — search real stores, cut the product out, drag/resize/rotate it into your room, then **Blend with AI** for matching light and shadows (or place as-is for free)
+  - **Move anything** — with the Move tool, tap any piece you added (AI or product) to lift it out of the photo and drag it; what was behind it is restored
+  - **Products** — search real stores, cut the product out, drag/resize/rotate it into your room, then **Blend with AI** for matching light and shadows (or place as-is for free). Recently viewed and saved items (with folders) live here too
   - **Shop** — box anything to find it with Google Lens; every AI or placed piece is listed with prices and a running total
   - History strip, undo/redo, before/after compare, download
 - **Shop a photo** (`/shop`) — the original Lens flow: upload any photo, box an item, get matches.
@@ -16,7 +16,7 @@ Snap a photo of your room, clear it out, try new pieces (AI-designed or real pro
 
 ## How walls stay untouched
 
-Image models redraw the whole picture even when given a mask, so walls and windows drift. We never use the model's output outside your mask: the browser composites only the masked pixels (with a feathered edge and automatic color matching) back onto your original photo. Everything you didn't paint is your original pixels. The prompts (`lib/prompts.ts`) then make the generated area agree with the untouched room.
+Image models redraw the whole picture even when given a mask, so walls and windows drift. We never use the model's output outside your mask: the browser composites only the masked pixels (with a feathered edge and automatic color matching) back onto your original photo. Everything you didn't paint is your original pixels. The prompts (`lib/prompts.ts`) then make the generated area agree with the untouched room. For small painted areas, a zoomed-in crop (still at least half the photo) is sent so the model spends its resolution on the piece.
 
 ## Deploying on Vercel
 

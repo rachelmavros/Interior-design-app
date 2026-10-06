@@ -22,6 +22,8 @@ export interface Sticker {
   flip: boolean;
   label: string;
   product?: Product;
+  /** An AI-designed piece lifted out of the photo (shop it via visual search). */
+  generated?: boolean;
 }
 
 export interface DesignItem {

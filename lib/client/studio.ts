@@ -4,8 +4,12 @@ import { create } from 'zustand';
 import { designEdit, getConfig, lensSearch } from './api';
 import {
   blobToImage,
+  anyChangeAlpha,
   buildEditInputs,
+  changedAlpha,
   compositeEdit,
+  cropCanvas,
+  focusRegion,
   cropToBase64,
   ctx2d,
   dims,
@@ -75,6 +79,7 @@ interface State {
   toast: Toast | null;
   model: string;
   models: string[];
+  smartFit: boolean;
 }
 
 const MASK_COLOR = '#ff4f7b';
@@ -99,6 +104,7 @@ const initial: State = {
   toast: null,
   model: DEFAULT_MODEL,
   models: [DEFAULT_MODEL],
+  smartFit: true,
 };
 
 export const useStudio = create<State>(() => initial);
@@ -337,16 +343,29 @@ function editLabel(p: EditParams) {
   const short = t.length > 40 ? `${t.slice(0, 40)}…` : t;
   if (p.mode === 'clear') return short ? `Removed ${short}` : 'Cleared area';
   if (p.mode === 'add') return `Added ${short}`;
-  if (p.mode === 'blend') return `Placed ${short}`;
-  return short || 'Custom edit';
+  return `Placed ${short}`;
 }
 
 async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: EditParams, reference?: Blob) {
   const { model, quality } = get();
-  const inputs = await buildEditInputs(source, mask, model);
+  const { W, H } = dims(source);
+  const b = maskBounds(mask)!;
+  const smartGrow = params.smart ? Math.round(Math.max(b.w, b.h) * 0.25) : 0;
+  const region = focusRegion(b, W, H, smartGrow);
+  const src = region ? cropCanvas(source, region) : source;
+  const m = region ? cropCanvas(mask, region) : mask;
+
+  const inputs = await buildEditInputs(src, m, model, smartGrow);
   const resultBlob = await designEdit({ ...inputs, quality, model, params, reference });
   const result = await blobToImage(resultBlob);
-  return compositeEdit(source, result, mask);
+  const patch = compositeEdit(src, result, m, smartGrow);
+  if (!region) return toBlob(patch, 'image/jpeg', 0.93);
+
+  const out = makeCanvas(W, H);
+  const g = ctx2d(out);
+  g.drawImage(source, 0, 0);
+  g.drawImage(patch, region.x, region.y);
+  return toBlob(out, 'image/jpeg', 0.93);
 }
 
 export async function runEdit(params: EditParams) {
@@ -357,8 +376,9 @@ export async function runEdit(params: EditParams) {
     set({ tool: 'brush' });
     return;
   }
-  const box = maskBounds(mask)!;
-  busy(params.mode === 'clear' ? 'Clearing the space' : params.mode === 'add' ? 'Designing your piece' : 'Applying your edit');
+  const project = get().project!;
+  const box = padBox(maskBounds(mask)!, params.smart ? 0.25 : 0.04, project.width, project.height);
+  busy(params.mode === 'clear' ? 'Clearing the space' : 'Designing your piece');
   reveal('.stage-wrap');
   try {
     const out = await runMaskedEdit(base, mask, params);
@@ -370,7 +390,7 @@ export async function runEdit(params: EditParams) {
     clearMask();
     set({ maskHistory: [] });
     if (item) {
-      toast('Done! Want to find this piece in stores?', 'success', { label: 'Shop it', run: () => shopItem(item) });
+      toast('Done! Drag it with the ✋ Move tool, or find it in stores.', 'success', { label: 'Shop it', run: () => shopItem(item) });
     } else {
       toast('Done. Use the history strip to compare or undo.', 'success');
     }
@@ -391,6 +411,10 @@ export async function shopBox(box: Box, label?: string) {
     return;
   }
   const { base64, dataUrl } = cropToBase64(base, box);
+  return runLens(base64, dataUrl, label);
+}
+
+async function runLens(base64: string, dataUrl: string, label?: string) {
   const key = Date.now();
   set({ tab: 'shop', lens: { status: 'loading', products: [], preview: dataUrl, label, key } });
   reveal('.studio-side');
@@ -398,14 +422,7 @@ export async function shopBox(box: Box, label?: string) {
     const data = await lensSearch(base64);
     if (get().lens.key !== key) return;
     set({
-      lens: {
-        status: 'done',
-        products: data.products,
-        suggestedQuery: data.suggestedQuery,
-        preview: dataUrl,
-        label,
-        key,
-      },
+      lens: { status: 'done', products: data.products, suggestedQuery: data.suggestedQuery, preview: dataUrl, label, key },
     });
   } catch (e) {
     if (get().lens.key !== key) return;
@@ -485,6 +502,113 @@ export async function placeImage(orig: HTMLCanvasElement, cut: HTMLCanvasElement
   );
 }
 
+/**
+ * Turns a piece already baked into the photo back into a movable layer: the
+ * pixels its edit changed become the layer, and what was behind it is restored.
+ */
+export async function liftItem(item: DesignItem) {
+  const { project, base, busy: isBusy } = get();
+  if (!project || !base || isBusy) return;
+  const idx = project.versions.findIndex((v) => v.id === item.versionId);
+  if (idx <= 0) return;
+  busy('Picking it up');
+  try {
+    const W = project.width;
+    const H = project.height;
+    const [before, after] = await Promise.all([
+      loadImage(await urlFor(project.versions[idx - 1].id)),
+      loadImage(await urlFor(item.versionId)),
+    ]);
+    // The edit may have touched pixels up to its smart-fit margin beyond the item box.
+    const box = padBox(item.box, 0.3, W, H);
+    const alpha = changedAlpha(before, after, box);
+    const undo = anyChangeAlpha(before, after, box);
+
+    let x0 = box.w, y0 = box.h, x1 = -1, y1 = -1;
+    for (let i = 0; i < alpha.length; i++) {
+      if (alpha[i] < 0.1) continue;
+      const x = i % box.w;
+      const y = (i / box.w) | 0;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    if (x1 < 0) throw new Error('Couldn’t separate that piece from the room.');
+
+    const afterPx = ctx2d(cropCanvas(after, box)).getImageData(0, 0, box.w, box.h);
+    const beforePx = ctx2d(cropCanvas(before, box)).getImageData(0, 0, box.w, box.h);
+    const restored = makeCanvas(W, H);
+    const gr = ctx2d(restored);
+    gr.drawImage(base, 0, 0);
+    const now = gr.getImageData(box.x, box.y, box.w, box.h);
+    for (let i = 0; i < alpha.length; i++) {
+      const p = i * 4;
+      afterPx.data[p + 3] = Math.round(alpha[i] * 255);
+      const u = Math.max(undo[i], alpha[i]);
+      if (u <= 0) continue;
+      for (let c = 0; c < 3; c++) now.data[p + c] = Math.round(now.data[p + c] * (1 - u) + beforePx.data[p + c] * u);
+    }
+    gr.putImageData(now, box.x, box.y);
+
+    const pieceFull = makeCanvas(box.w, box.h);
+    ctx2d(pieceFull).putImageData(afterPx, 0, 0);
+    const tw = x1 - x0 + 1;
+    const th = y1 - y0 + 1;
+    const piece = cropCanvas(pieceFull, { x: x0, y: y0, w: tw, h: th });
+
+    await commitVersion(await toBlob(restored, 'image/jpeg', 0.93), `Picked up ${item.label.slice(0, 40)}`);
+    patchProject({ items: get().project!.items.filter((i) => i.id !== item.id) });
+    const blobId = await storeBlob(await toBlob(piece, 'image/png'));
+    const sticker: Sticker = {
+      id: uid(),
+      blobId,
+      origBlobId: blobId,
+      cutout: true,
+      x: box.x + x0 + tw / 2,
+      y: box.y + y0 + th / 2,
+      w: tw,
+      h: th,
+      rotation: 0,
+      flip: false,
+      label: item.label,
+      product: item.product,
+      generated: item.kind === 'generated',
+    };
+    patchProject({ stickers: [...get().project!.stickers, sticker] }, true);
+    set({ selected: sticker.id, tool: 'move' });
+    toast('Picked up! Drag it anywhere, then “Place as-is” or “Blend with AI” to set it down.', 'success');
+  } catch (e) {
+    toast((e as Error).message, 'error');
+  } finally {
+    set({ busy: null });
+  }
+}
+
+/** The topmost liftable piece under a point (image coordinates). */
+export function itemAt(x: number, y: number): DesignItem | null {
+  const p = get().project;
+  if (!p) return null;
+  const items = visibleItems(p).filter((i) => p.versions.findIndex((v) => v.id === i.versionId) > 0);
+  for (let k = items.length - 1; k >= 0; k--) {
+    const b = items[k].box;
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return items[k];
+  }
+  return null;
+}
+
+/** Visual search on a movable layer's own pixels. */
+export async function shopSticker(s: Sticker) {
+  const img = await loadImage(get().urls[s.blobId]);
+  const c = makeCanvas(img.naturalWidth, img.naturalHeight);
+  const g = ctx2d(c);
+  g.fillStyle = '#fff';
+  g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(img, 0, 0);
+  const { base64, dataUrl } = cropToBase64(c, { x: 0, y: 0, w: c.width, h: c.height });
+  runLens(base64, dataUrl, s.label);
+}
+
 export function updateSticker(id: string, patch: Partial<Sticker>, save = true) {
   const p = get().project;
   if (!p) return;
@@ -549,7 +673,7 @@ export async function flattenSticker(id: string) {
   const c = await flattened(s);
   const { W, H } = dims(c);
   await commitVersion(await toBlob(c, 'image/jpeg', 0.93), `Placed ${s.label.slice(0, 40)}`, {
-    kind: 'product',
+    kind: s.generated ? 'generated' : 'product',
     label: s.label,
     box: stickerBox(s, W, H),
     product: s.product,
@@ -579,7 +703,7 @@ export async function blendSticker(id: string) {
     const reference = await getBlob(s.origBlobId);
     const out = await runMaskedEdit(composed, m, { mode: 'blend', text: s.label.slice(0, 120) }, reference);
     await commitVersion(out, `Placed ${s.label.slice(0, 40)}`, {
-      kind: 'product',
+      kind: s.generated ? 'generated' : 'product',
       label: s.label,
       box: stickerBox(s, W, H),
       product: s.product,
