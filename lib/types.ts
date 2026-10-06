@@ -25,13 +25,15 @@ export interface ProductSearchResponse {
   error?: string;
 }
 
-export type EditMode = 'clear' | 'add' | 'blend' | 'custom';
+export type EditMode = 'clear' | 'add' | 'blend';
 
 export interface EditParams {
   mode: EditMode;
-  /** clear: what to remove. add: the item. custom: the instruction. */
+  /** clear: what to remove. add/blend: the item. */
   text?: string;
   style?: string;
+  /** add: the painted area is approximate; the piece may extend past it. */
+  smart?: boolean;
 }
 
 export interface AppConfig {

@@ -139,7 +139,7 @@ export default function Home() {
         </section>
 
         <section>
-          <div className="section-head">
+          <div className="section-head" id="rooms">
             <h2 className="display">Your rooms</h2>
             <span className="tiny muted">Saved on this device</span>
           </div>
