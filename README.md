@@ -6,6 +6,7 @@ Snap a photo of your room, clear it out, try new pieces (AI-designed or real pro
   - **Clear out** furniture (AI fills in the floor/walls behind it)
   - **Add with AI** — describe a piece + pick a style; it's placed with real perspective & shadows
   - **Custom** — any masked edit ("paint this wall sage green")
+  - **Your own piece** — upload a photo or paste a product/image link, box the item, and drop it in (great for artwork)
   - **Products** — search real stores, cut the product out, drag/resize/rotate it into your room, then **Blend with AI** for matching light and shadows (or place as-is for free)
   - **Shop** — box anything to find it with Google Lens; every AI or placed piece is listed with prices and a running total
   - History strip, undo/redo, before/after compare, download
@@ -27,7 +28,9 @@ Image models redraw the whole picture even when given a mask, so walls and windo
    | `SERP_KEY` | yes | Google Lens + Google Shopping via [SerpAPI](https://serpapi.com) |
    | `IMGBB_KEY` | yes | Temporary hosting of your crop so Lens can see it (auto-deletes after 10 min) |
    | `OPENAI_API_KEY` | yes | AI edits. Your OpenAI org may need [verification](https://platform.openai.com/settings/organization/general) to use image models |
-   | `OPENAI_IMAGE_MODEL` | no | Defaults to `gpt-image-2`. `gpt-image-1.5` / `gpt-image-1` also work |
+   | `OPENAI_IMAGE_MODEL` | no | Starting model: `gpt-image-1-mini` (default, cheapest), `gpt-image-1.5`, or `gpt-image-2`. Visitors can switch in the studio |
+   | `OPENAI_ALLOWED_MODELS` | no | Comma-separated list to restrict which models visitors may pick (e.g. hide Premium) |
+   | `CONTACT_EMAIL` | no | Shown on the privacy page |
    | `APP_ACCESS_CODE` | no | Visitors must enter this code before searching or generating — protects your API bill while you're in beta |
    | `AMAZON_ASSOCIATE_TAG` | no | e.g. `yourtag-20`; added to Amazon links |
    | `SOVRN_API_KEY` | no | Sovrn Commerce key; turns links to thousands of retailers into affiliate links |
@@ -38,7 +41,7 @@ Image models redraw the whole picture even when given a mask, so walls and windo
 AI edits take 20–60s, so the edit function is allowed 300s. That needs Vercel's Fluid Compute, which is on by default for new projects.
 
 ### Costs to expect
-Each AI edit is one OpenAI image call. **Draft** (low) quality costs cents; **Best** (high) is roughly 10–15× more. Each Lens or store search is one SerpAPI search. Set `APP_ACCESS_CODE` before sharing the link widely.
+Each AI edit is one OpenAI image call. The studio shows an estimate on every generate button. Roughly, per edit of a landscape photo: Budget + Draft ≈ 1¢, Balanced + Standard ≈ 5¢, Premium + Best ≈ 33¢. Each Lens or store search is one SerpAPI search. Set `APP_ACCESS_CODE` before sharing the link widely.
 
 ## Affiliate links
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import type { AppConfig, EditParams, ProductSearchResponse } from '../types';
+import type { AppConfig, EditParams, Product, ProductSearchResponse } from '../types';
 
 const CODE_KEY = 'rts-access-code';
 
@@ -64,7 +64,7 @@ let configPromise: Promise<AppConfig> | null = null;
 export function getConfig(): Promise<AppConfig> {
   configPromise ??= fetch('/api/config')
     .then((r) => r.json())
-    .catch(() => ({ model: 'gpt-image-2', mock: false, accessRequired: false, missing: [] }));
+    .catch(() => ({ model: 'gpt-image-1-mini', models: ['gpt-image-1-mini'], amazon: false, mock: false, accessRequired: false, missing: [] }));
   return configPromise;
 }
 
@@ -87,6 +87,7 @@ export async function designEdit(opts: {
   mask: Blob;
   size: string;
   quality: string;
+  model: string;
   params: EditParams;
   reference?: Blob;
 }): Promise<Blob> {
@@ -96,6 +97,7 @@ export async function designEdit(opts: {
   if (opts.reference) fd.append('reference', opts.reference, 'product.png');
   fd.append('size', opts.size);
   fd.append('quality', opts.quality);
+  fd.append('model', opts.model);
   fd.append('params', JSON.stringify(opts.params));
   const res = await call('/api/design/edit', { method: 'POST', body: fd });
   if (!res.ok) {
@@ -103,4 +105,9 @@ export async function designEdit(opts: {
     throw new Error(data.error || `Edit failed (${res.status})`);
   }
   return res.blob();
+}
+
+export async function linkPreview(url: string) {
+  const res = await call(`/api/link-preview?url=${encodeURIComponent(url)}`);
+  return jsonOrThrow<{ image: string; product?: Product }>(res);
 }

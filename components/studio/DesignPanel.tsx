@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { IconSparkles, IconWand, IconTrash } from '@tabler/icons-react';
-import { runEdit, useStudio, type Quality } from '@/lib/client/studio';
+import { runEdit, useStudio } from '@/lib/client/studio';
+import { AiSettings, useEditCost } from './AiSettings';
+import { StyleSwatch } from './StyleSwatch';
 import { QUICK_ITEMS, STYLES } from '@/lib/prompts';
 
 type Mode = 'clear' | 'add' | 'custom';
@@ -13,15 +15,9 @@ const MODES: { id: Mode; label: string }[] = [
   { id: 'custom', label: 'Custom' },
 ];
 
-const QUALITY: { id: Quality; label: string }[] = [
-  { id: 'low', label: 'Draft' },
-  { id: 'medium', label: 'Standard' },
-  { id: 'high', label: 'Best' },
-];
-
 export function DesignPanel() {
   const coverage = useStudio((s) => s.maskCoverage);
-  const quality = useStudio((s) => s.quality);
+  const cost = useEditCost();
   const busy = useStudio((s) => s.busy);
   const tool = useStudio((s) => s.tool);
   const [mode, setMode] = useState<Mode>('clear');
@@ -114,10 +110,16 @@ export function DesignPanel() {
           </div>
           <div>
             <span className="label">Style</span>
-            <div className="chips">
+            <div className="style-grid">
               {STYLES.map((s) => (
-                <button key={s} className={`chip ${style === s ? 'on' : ''}`} onClick={() => setStyle(style === s ? undefined : s)}>
-                  {s}
+                <button
+                  key={s}
+                  className={`style-card ${style === s ? 'on' : ''}`}
+                  onClick={() => setStyle(style === s ? undefined : s)}
+                  aria-pressed={style === s}
+                >
+                  <StyleSwatch style={s} />
+                  <span>{s}</span>
                 </button>
               ))}
             </div>
@@ -140,23 +142,12 @@ export function DesignPanel() {
         </div>
       )}
 
-      <div>
-        <span className="label">Quality</span>
-        <div className="segmented">
-          {QUALITY.map((q) => (
-            <button key={q.id} className={quality === q.id ? 'on' : ''} onClick={() => useStudio.setState({ quality: q.id })}>
-              {q.label}
-            </button>
-          ))}
-        </div>
-        <p className="tiny muted" style={{ marginTop: 6 }}>
-          Draft is fastest and cheapest for trying ideas; Best for the final look.
-        </p>
-      </div>
+      <AiSettings />
 
       <button className="btn btn-accent btn-lg btn-block" onClick={go} disabled={!!busy || !painted || needsText}>
         {mode === 'clear' ? <IconTrash size={18} /> : mode === 'add' ? <IconSparkles size={18} /> : <IconWand size={18} />}
         {mode === 'clear' ? 'Clear painted area' : mode === 'add' ? 'Design it here' : 'Apply edit'}
+        {cost && <span className="btn-cost">{cost}</span>}
       </button>
     </div>
   );

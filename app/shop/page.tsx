@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { IconPalette, IconRefresh } from '@tabler/icons-react';
 import { SiteHeader } from '@/components/SiteHeader';
@@ -8,12 +8,11 @@ import { PhotoPicker } from '@/components/PhotoPicker';
 import { ProductResults } from '@/components/ProductResults';
 import { SetupNotice } from '@/components/SetupNotice';
 import { Disclosure } from '@/components/Disclosure';
+import { BoxSelect } from '@/components/BoxSelect';
 import { lensSearch } from '@/lib/client/api';
 import { createProject } from '@/lib/client/db';
 import { cropToBase64, loadImage, prepareUpload } from '@/lib/client/image';
 import type { Box, Product } from '@/lib/types';
-
-type Pt = { x: number; y: number };
 
 export default function ShopPage() {
   const router = useRouter();
@@ -123,67 +122,5 @@ export default function ShopPage() {
         <Disclosure />
       </main>
     </>
-  );
-}
-
-function BoxSelect({ img, src, onBox }: { img: HTMLImageElement; src: string; onBox: (b: Box) => void }) {
-  const wrap = useRef<HTMLDivElement>(null);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const start = useRef<Pt | null>(null);
-  const last = useRef<Box | null>(null);
-
-  const toImg = (e: React.PointerEvent): Pt => {
-    const r = wrap.current!.getBoundingClientRect();
-    return {
-      x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * img.naturalWidth,
-      y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) * img.naturalHeight,
-    };
-  };
-
-  function draw(b: Box | null) {
-    const c = canvas.current!;
-    c.width = img.naturalWidth;
-    c.height = img.naturalHeight;
-    const g = c.getContext('2d')!;
-    if (!b) return;
-    g.fillStyle = 'rgba(31,27,22,.45)';
-    g.fillRect(0, 0, c.width, c.height);
-    g.clearRect(b.x, b.y, b.w, b.h);
-    g.strokeStyle = '#fff';
-    g.lineWidth = Math.max(2, c.width / 400);
-    g.strokeRect(b.x, b.y, b.w, b.h);
-  }
-
-  const boxFrom = (a: Pt, b: Pt): Box => ({
-    x: Math.round(Math.min(a.x, b.x)),
-    y: Math.round(Math.min(a.y, b.y)),
-    w: Math.round(Math.abs(a.x - b.x)),
-    h: Math.round(Math.abs(a.y - b.y)),
-  });
-
-  return (
-    <div
-      className="box-select"
-      ref={wrap}
-      onPointerDown={(e) => {
-        (e.target as Element).setPointerCapture(e.pointerId);
-        start.current = toImg(e);
-      }}
-      onPointerMove={(e) => {
-        if (!start.current) return;
-        last.current = boxFrom(start.current, toImg(e));
-        draw(last.current);
-      }}
-      onPointerUp={() => {
-        const b = last.current;
-        start.current = null;
-        last.current = null;
-        if (b && b.w > 16 && b.h > 16) onBox(b);
-        else draw(null);
-      }}
-    >
-      <img src={src} alt="Your photo" draggable={false} />
-      <canvas ref={canvas} />
-    </div>
   );
 }

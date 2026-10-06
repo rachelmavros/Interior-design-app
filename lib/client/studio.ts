@@ -31,10 +31,12 @@ import {
   type Sticker,
 } from './db';
 import type { Box, EditParams, Product } from '../types';
+import { DEFAULT_MODEL, DEFAULT_QUALITY, type Quality } from '../models';
+
+export type { Quality };
 
 export type Tool = 'move' | 'brush' | 'eraser' | 'rect' | 'lasso' | 'shop';
 export type Tab = 'design' | 'products' | 'shop';
-export type Quality = 'low' | 'medium' | 'high';
 
 export interface LensState {
   status: 'idle' | 'loading' | 'done' | 'error';
@@ -72,6 +74,7 @@ interface State {
   lens: LensState;
   toast: Toast | null;
   model: string;
+  models: string[];
 }
 
 const MASK_COLOR = '#ff4f7b';
@@ -88,13 +91,14 @@ const initial: State = {
   tool: 'brush',
   brush: 36,
   tab: 'design',
-  quality: 'medium',
+  quality: DEFAULT_QUALITY,
   selected: null,
   busy: null,
   compare: false,
   lens: { status: 'idle', products: [], key: 0 },
   toast: null,
-  model: 'gpt-image-2',
+  model: DEFAULT_MODEL,
+  models: [DEFAULT_MODEL],
 };
 
 export const useStudio = create<State>(() => initial);
@@ -114,6 +118,26 @@ function reveal(selector: '.stage-wrap' | '.studio-side') {
   requestAnimationFrame(() =>
     document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
   );
+}
+
+// ── Preferences ───────────────────────────────────────────
+
+const PREFS_KEY = 'rts-ai-prefs';
+
+function readPrefs(): { model?: string; quality?: Quality } {
+  try {
+    return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+export function setAiPrefs(patch: { model?: string; quality?: Quality }) {
+  set(patch);
+  try {
+    const { model, quality } = get();
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ model, quality }));
+  } catch {}
 }
 
 // ── Persistence ───────────────────────────────────────────
@@ -184,7 +208,16 @@ export async function loadStudio(id: string) {
     }
     const base = await loadImage(urls[project.versions[project.current].id]);
     if (token !== loadToken) return;
-    set({ project, urls, model: config.model, base, mask: makeCanvas(project.width, project.height) });
+    const prefs = readPrefs();
+    set({
+      project,
+      urls,
+      models: config.models,
+      model: prefs.model && config.models.includes(prefs.model) ? prefs.model : config.model,
+      quality: prefs.quality || DEFAULT_QUALITY,
+      base,
+      mask: makeCanvas(project.width, project.height),
+    });
   } catch (e) {
     if (token === loadToken) set({ loadError: (e as Error).message });
   }
@@ -311,7 +344,7 @@ function editLabel(p: EditParams) {
 async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: EditParams, reference?: Blob) {
   const { model, quality } = get();
   const inputs = await buildEditInputs(source, mask, model);
-  const resultBlob = await designEdit({ ...inputs, quality, params, reference });
+  const resultBlob = await designEdit({ ...inputs, quality, model, params, reference });
   const result = await blobToImage(resultBlob);
   return compositeEdit(source, result, mask);
 }
@@ -405,47 +438,51 @@ export async function placeProduct(product: Product) {
     const img = await fetchProductImage(product);
     const orig = makeCanvas(img.naturalWidth, img.naturalHeight);
     ctx2d(orig).drawImage(img, 0, 0);
-    const cut = removeBackground(img);
-    const origBlobId = await storeBlob(await toBlob(orig, 'image/png'));
-    const blobId = cut ? await storeBlob(await toBlob(cut, 'image/png')) : origBlobId;
-    const shape = cut || orig;
-
-    const W = project.width;
-    const H = project.height;
-    let w = W * 0.3;
-    let h = (w * shape.height) / shape.width;
-    if (h > H * 0.55) {
-      h = H * 0.55;
-      w = (h * shape.width) / shape.height;
-    }
-    const sticker: Sticker = {
-      id: uid(),
-      blobId,
-      origBlobId,
-      cutout: Boolean(cut),
-      x: W / 2,
-      y: Math.min(H - h / 2, H * 0.62),
-      w,
-      h,
-      rotation: 0,
-      flip: false,
-      label: product.title,
-      product,
-    };
-    patchProject({ stickers: [...get().project!.stickers, sticker] }, true);
-    set({ selected: sticker.id, tool: 'move' });
-    reveal('.stage-wrap');
-    toast(
-      cut
-        ? 'Drag to place it, use the corner to resize. Then “Blend with AI” for real lighting & shadows.'
-        : 'Placed with its background (it wasn’t a plain studio shot). “Blend with AI” will integrate it.',
-      'success',
-    );
+    await placeImage(orig, removeBackground(orig), product.title, product);
   } catch (e) {
     toast((e as Error).message, 'error');
   } finally {
     set({ busy: null });
   }
+}
+
+/** Adds an image (and optional cutout of it) to the room as a movable layer. */
+export async function placeImage(orig: HTMLCanvasElement, cut: HTMLCanvasElement | null, label: string, product?: Product) {
+  const project = get().project;
+  if (!project) return;
+  const origBlobId = await storeBlob(await toBlob(orig, 'image/png'));
+  const blobId = cut ? await storeBlob(await toBlob(cut, 'image/png')) : origBlobId;
+  const shape = cut || orig;
+
+  const W = project.width;
+  const H = project.height;
+  let w = W * 0.3;
+  let h = (w * shape.height) / shape.width;
+  if (h > H * 0.55) {
+    h = H * 0.55;
+    w = (h * shape.width) / shape.height;
+  }
+  const sticker: Sticker = {
+    id: uid(),
+    blobId,
+    origBlobId,
+    cutout: Boolean(cut),
+    x: W / 2 + (((project.stickers.length % 3) - (project.stickers.length % 3 === 2 ? 3 : 0)) * W) / 8,
+    y: Math.min(H - h / 2, H * 0.5),
+    w,
+    h,
+    rotation: 0,
+    flip: false,
+    label: label.slice(0, 160) || 'My item',
+    product,
+  };
+  patchProject({ stickers: [...get().project!.stickers, sticker] }, true);
+  set({ selected: sticker.id, tool: 'move' });
+  reveal('.stage-wrap');
+  toast(
+    'Drag to place it, use the corner to resize. Then “Blend with AI” for real lighting & shadows.',
+    'success',
+  );
 }
 
 export function updateSticker(id: string, patch: Partial<Sticker>, save = true) {
