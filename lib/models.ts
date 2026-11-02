@@ -30,6 +30,13 @@ export const IMAGE_MODELS: ImageModel[] = [
   },
 ];
 
+export const QUALITY_LABELS: Record<Quality, string> = { low: 'Draft', medium: 'Standard', high: 'Best' };
+
+/** Short "Balanced · Standard" tag for an AI edit. */
+export function aiTag(model: string, quality: Quality) {
+  return `${IMAGE_MODELS.find((m) => m.id === model)?.label ?? model} · ${QUALITY_LABELS[quality]}`;
+}
+
 export const DEFAULT_MODEL = 'gpt-image-1-mini';
 export const DEFAULT_QUALITY: Quality = 'low';
 

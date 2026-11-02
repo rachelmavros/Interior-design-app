@@ -226,6 +226,7 @@ img { display: block; max-width: 100%; }
 .version.on { border-color: var(--ink); }
 .version.off-path { opacity: .55; }
 .version .branch { font-style: normal; color: var(--accent); }
+.version .version-ai { display: block; font-size: 9px; line-height: 1.25; color: var(--muted); padding: 0 2px; }
 
 /* ── Side panel ───────────────────────────────── */
 .tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 8px; flex-shrink: 0; }

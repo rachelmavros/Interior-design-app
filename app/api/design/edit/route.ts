@@ -97,7 +97,7 @@ export async function POST(req: Request) {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}` },
         body: fd,
-        signal: AbortSignal.timeout(280_000),
+        signal: AbortSignal.any([req.signal, AbortSignal.timeout(280_000)]),
       });
     } catch (e) {
       console.error('openai fetch', e);

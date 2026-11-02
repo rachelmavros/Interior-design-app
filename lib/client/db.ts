@@ -1,5 +1,6 @@
 import { createStore, del, get, keys, set } from 'idb-keyval';
 import type { Box, Product } from '../types';
+import type { Quality } from '../models';
 
 export interface Version {
   id: string;
@@ -7,6 +8,8 @@ export interface Version {
   createdAt: number;
   /** Version this one was edited from. Missing on older projects, where it's the previous entry. */
   parentId?: string;
+  /** Image model and quality that made this version, for AI edits. */
+  ai?: { model: string; quality: Quality };
 }
 
 export interface Sticker {
