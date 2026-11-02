@@ -24,7 +24,7 @@ ${
     : 'Remove the furniture, decor and loose objects in the masked region.'
 }
 Remove those objects completely, including any shadows, reflections and cast light that come from them.
-The masked region may already be pre-filled with a soft, blurry blend of the surrounding colors as a placeholder. Treat that placeholder as a rough hint of the surface behind, never as something to keep: replace it with real, sharp surface texture.
+The masked region has already been pre-filled with a rough placeholder built from the surrounding photo. Treat it as a hint of the surfaces behind (where edges and lines continue), never as something to keep as-is: re-render it as real, sharp, seamless surface.
 
 Then rebuild what the camera would have seen if they had never been there:
 - Complete everything that was partly hidden. Continue cabinets, cabinet doors and drawers, countertops, toe kicks, shelving, built-ins, wainscoting, baseboards, trim, windows, radiators, wall surfaces and floor patterns through the removed area — matching their existing style, material, color, hardware, panel sizes, spacing and alignment, and following the room's perspective lines and vanishing points.
