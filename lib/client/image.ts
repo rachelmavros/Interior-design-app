@@ -166,8 +166,181 @@ function edgeRadii(w: number, h: number) {
   return { grow: Math.max(3, Math.round(long * 0.006)), feather: Math.max(4, Math.round(long * 0.01)) };
 }
 
+// ── Membrane fill ─────────────────────────────────────────
+
+/** Smooth fills and corrections are solved on a small grid, then scaled up. */
+const GRID = 256;
+
+function gridSize(w: number, h: number) {
+  const s = Math.min(1, GRID / Math.max(w, h));
+  return { gw: Math.max(1, Math.round(w * s)), gh: Math.max(1, Math.round(h * s)) };
+}
+
+/** Downscales in halving steps so every grid cell is a true area average (no aliasing on texture). */
+function shrink(src: Drawable, sx: number, sy: number, sw: number, sh: number, gw: number, gh: number) {
+  let cur: Drawable = src;
+  let box = { x: sx, y: sy, w: sw, h: sh };
+  while (box.w / 2 > gw && box.h / 2 > gh) {
+    const c = makeCanvas(box.w / 2, box.h / 2);
+    const g = ctx2d(c);
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(cur, box.x, box.y, box.w, box.h, 0, 0, c.width, c.height);
+    cur = c;
+    box = { x: 0, y: 0, w: c.width, h: c.height };
+  }
+  const out = makeCanvas(gw, gh);
+  const g = ctx2d(out);
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(cur, box.x, box.y, box.w, box.h, 0, 0, gw, gh);
+  return g.getImageData(0, 0, gw, gh).data;
+}
+
+/**
+ * Fills unknown cells with the smoothest surface that meets the known cells
+ * at the hole's edge (a Laplace "membrane"). Solved coarse-to-fine so large
+ * holes converge in a few dozen sweeps. `v` holds `ch` interleaved channels.
+ */
+function membraneFill(v: Float32Array, known: Uint8Array, w: number, h: number, ch: number): Float32Array {
+  const out = Float32Array.from(v);
+  if (known.every((k) => k)) return out;
+  if (!known.some((k) => k)) return out.fill(0);
+
+  // Seed unknown cells from a half-size solve.
+  if (w > 8 && h > 8) {
+    const hw = Math.ceil(w / 2);
+    const hh = Math.ceil(h / 2);
+    const sv = new Float32Array(hw * hh * ch);
+    const sk = new Uint8Array(hw * hh);
+    const cnt = new Float32Array(hw * hh);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (!known[i]) continue;
+        const j = (y >> 1) * hw + (x >> 1);
+        sk[j] = 1;
+        cnt[j]++;
+        for (let c = 0; c < ch; c++) sv[j * ch + c] += v[i * ch + c];
+      }
+    }
+    for (let j = 0; j < cnt.length; j++) if (cnt[j]) for (let c = 0; c < ch; c++) sv[j * ch + c] /= cnt[j];
+    const coarse = membraneFill(sv, sk, hw, hh, ch);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (known[i]) continue;
+        const j = (y >> 1) * hw + (x >> 1);
+        for (let c = 0; c < ch; c++) out[i * ch + c] = coarse[j * ch + c];
+      }
+    }
+  }
+
+  // Gauss-Seidel relaxation on the unknown cells only.
+  for (let it = 0; it < 40; it++) {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (known[i]) continue;
+        const nb = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1];
+        let n = 0;
+        for (const k of nb) if (k >= 0) n++;
+        for (let c = 0; c < ch; c++) {
+          let s = 0;
+          for (const k of nb) if (k >= 0) s += out[k * ch + c];
+          out[i * ch + c] = s / n;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * True when the cells bordering the hole are all roughly one surface (a
+ * plain wall, one floor). Lighting gradients pass; a cabinet edge or a
+ * doorway on the border does not.
+ */
+function borderIsOneSurface(v: Float32Array, known: Uint8Array, w: number, h: number) {
+  const ring: number[] = [];
+  for (let i = 0; i < known.length; i++) {
+    if (!known[i]) continue;
+    const x = i % w;
+    const y = (i - x) / w;
+    let near = false;
+    for (let dy = -2; dy <= 2 && !near; dy++) {
+      for (let dx = -2; dx <= 2 && !near; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && ny >= 0 && nx < w && ny < h && !known[ny * w + nx]) near = true;
+      }
+    }
+    if (near) ring.push(i);
+  }
+  if (ring.length < 8) return false;
+
+  // Compare tint and brightness separately: light falloff across one wall
+  // changes brightness a lot but tint barely, while wood next to paint
+  // differs in tint, and a dark counter next to a pale wall in brightness.
+  const lum = (i: number) => Math.max(1, v[i * 3] + v[i * 3 + 1] + v[i * 3 + 2]);
+  const tint = (i: number) => [v[i * 3] / lum(i), v[i * 3 + 1] / lum(i)];
+  const mid = (xs: number[]) => xs.sort((a, b) => a - b)[xs.length >> 1];
+  const mL = mid(ring.map(lum));
+  const mR = mid(ring.map((i) => tint(i)[0]));
+  const mG = mid(ring.map((i) => tint(i)[1]));
+  const close = ring.filter((i) => {
+    const [r, g] = tint(i);
+    const ratio = lum(i) / mL;
+    return Math.hypot(r - mR, g - mG) < 0.035 && ratio > 0.65 && ratio < 1.5;
+  }).length;
+  return close / ring.length >= 0.92;
+}
+
+/**
+ * Smooth RGB fill of the region `hole` (alpha canvas, same size as `src`)
+ * from the pixels around it, returned at full size. Used to blank out an
+ * object before the model sees it, so it has nothing to leave a ghost of.
+ * Returns null when the hole borders several different surfaces: there a
+ * smooth fill smears them together (cabinet brown bleeding up a wall), and
+ * the model reads the smear as more cabinet.
+ */
+function smoothFill(src: HTMLCanvasElement, hole: HTMLCanvasElement) {
+  const { width: w, height: h } = src;
+  const { gw, gh } = gridSize(w, h);
+  const px = shrink(src, 0, 0, w, h, gw, gh);
+  const ha = shrink(hole, 0, 0, w, h, gw, gh);
+  const v = new Float32Array(gw * gh * 3);
+  const known = new Uint8Array(gw * gh);
+  for (let i = 0; i < known.length; i++) {
+    known[i] = ha[i * 4 + 3] < 3 ? 1 : 0;
+    for (let c = 0; c < 3; c++) v[i * 3 + c] = px[i * 4 + c];
+  }
+  if (!borderIsOneSurface(v, known, gw, gh)) return null;
+  const filled = membraneFill(v, known, gw, gh, 3);
+  const small = makeCanvas(gw, gh);
+  const gs = ctx2d(small);
+  const img = gs.createImageData(gw, gh);
+  for (let i = 0; i < known.length; i++) {
+    for (let c = 0; c < 3; c++) img.data[i * 4 + c] = filled[i * 3 + c];
+    img.data[i * 4 + 3] = 255;
+  }
+  gs.putImageData(img, 0, 0);
+
+  const out = makeCanvas(w, h);
+  const go = ctx2d(out);
+  go.imageSmoothingQuality = 'high';
+  go.drawImage(small, 0, 0, w, h);
+  go.globalCompositeOperation = 'destination-in';
+  go.drawImage(hole, 0, 0);
+  return out;
+}
+
 /** Image + OpenAI-format mask (transparent = editable) at the request size. */
-export async function buildEditInputs(base: Drawable, mask: HTMLCanvasElement, model: string, quality?: string) {
+export async function buildEditInputs(
+  base: Drawable,
+  mask: HTMLCanvasElement,
+  model: string,
+  quality?: string,
+  prefill = false,
+) {
   const { W, H } = dims(base);
   const send = pickSendSize(W, H, model, quality);
   const { grow, feather } = edgeRadii(W, H);
@@ -180,6 +353,16 @@ export async function buildEditInputs(base: Drawable, mask: HTMLCanvasElement, m
   const gi = ctx2d(img);
   gi.imageSmoothingQuality = 'high';
   gi.drawImage(base, 0, 0, send.w, send.h);
+
+  if (prefill) {
+    // Image models trace whatever is under the mask, which is what leaves a
+    // faint silhouette of removed furniture. Blank it out with the
+    // surrounding colors first; the model only has to add real texture.
+    const hole = makeCanvas(send.w, send.h);
+    ctx2d(hole).drawImage(grown, 0, 0, send.w, send.h);
+    const fill = smoothFill(img, hole);
+    if (fill) gi.drawImage(fill, 0, 0);
+  }
 
   const m = makeCanvas(send.w, send.h);
   const gm = ctx2d(m);
@@ -196,25 +379,46 @@ export async function buildEditInputs(base: Drawable, mask: HTMLCanvasElement, m
 }
 
 /**
- * Generated images drift slightly in color and exposure overall. Measuring
- * the drift on pixels that should be unchanged (outside the mask) and
- * correcting it keeps the pasted region from looking tinted.
+ * Generated pixels drift in color and brightness, and not uniformly: a wall
+ * can come back a shade lighter on one side and darker on the other, which
+ * reads as an outline of the pasted area. Measure the drift on the ring of
+ * untouched pixels around the paste, spread it smoothly inward, and return
+ * the per-pixel RGB offset to add to the result inside `box`.
  */
-function colorGains(base: ImageData, result: ImageData, keep: Float32Array) {
-  const s = [0, 0, 0];
-  const r = [0, 0, 0];
-  let n = 0;
-  for (let i = 0; i < keep.length; i += 7) {
-    if (keep[i] > 0) continue;
-    const p = i * 4;
-    for (let c = 0; c < 3; c++) {
-      s[c] += base.data[p + c];
-      r[c] += result.data[p + c];
+function seamCorrection(base: Drawable, result: Drawable, alpha: Float32Array, W: number, box: Box) {
+  const { gw, gh } = gridSize(box.w, box.h);
+  const b = shrink(base, box.x, box.y, box.w, box.h, gw, gh);
+  const r = shrink(result, box.x, box.y, box.w, box.h, gw, gh);
+
+  // A grid cell is "known" only if no part of it gets pasted.
+  const inside = new Uint8Array(gw * gh);
+  for (let y = 0; y < box.h; y++) {
+    const gy = Math.min(gh - 1, Math.floor((y * gh) / box.h));
+    for (let x = 0; x < box.w; x++) {
+      if (alpha[(box.y + y) * W + box.x + x] > 0) inside[gy * gw + Math.min(gw - 1, Math.floor((x * gw) / box.w))] = 1;
     }
-    n++;
   }
-  if (n < 500) return [1, 1, 1];
-  return s.map((v, c) => Math.min(1.15, Math.max(0.87, v / Math.max(1, r[c]))));
+  const known = inside.map((v) => 1 - v);
+  const d = new Float32Array(gw * gh * 3);
+  for (let i = 0; i < known.length; i++) {
+    for (let c = 0; c < 3; c++) d[i * 3 + c] = b[i * 4 + c] - r[i * 4 + c];
+  }
+  const filled = membraneFill(d, known, gw, gh, 3);
+
+  // Scale the offset field up with the canvas's smooth resampling (stored as 128 ± offset).
+  const small = makeCanvas(gw, gh);
+  const gs = ctx2d(small);
+  const img = gs.createImageData(gw, gh);
+  for (let i = 0; i < known.length; i++) {
+    for (let c = 0; c < 3; c++) img.data[i * 4 + c] = 128 + Math.max(-127, Math.min(127, filled[i * 3 + c]));
+    img.data[i * 4 + 3] = 255;
+  }
+  gs.putImageData(img, 0, 0);
+  const big = makeCanvas(box.w, box.h);
+  const gb = ctx2d(big);
+  gb.imageSmoothingQuality = 'high';
+  gb.drawImage(small, 0, 0, box.w, box.h);
+  return gb.getImageData(0, 0, box.w, box.h).data;
 }
 
 /** Pastes the generated pixels back over the original, only inside the user's mask (feathered). */
@@ -233,18 +437,37 @@ export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HT
   gl.drawImage(result, 0, 0, W, H);
   const resData = gl.getImageData(0, 0, W, H);
 
-  const userMask = readAlpha(mask);
-  const sentRegion = dilate(userMask, W, H, grow + feather * 2);
-  const gains = colorGains(baseData, resData, sentRegion);
-
-  const alpha = blurAlpha(dilate(userMask, W, H, grow), W, H, feather);
+  const alpha = blurAlpha(dilate(readAlpha(mask), W, H, grow), W, H, feather);
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
   for (let i = 0; i < alpha.length; i++) {
-    const p = i * 4;
-    const a = alpha[i];
-    if (a <= 0) continue;
-    for (let c = 0; c < 3; c++) {
-      const v = Math.min(255, resData.data[p + c] * gains[c]);
-      baseData.data[p + c] = Math.round(baseData.data[p + c] * (1 - a) + v * a);
+    if (alpha[i] <= 0) continue;
+    const x = i % W;
+    const y = (i - x) / W;
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  if (x1 < 0) return out;
+
+  // Measure the drift on a band of untouched pixels around the paste.
+  const pad = feather * 4;
+  const bx = Math.max(0, x0 - pad);
+  const by = Math.max(0, y0 - pad);
+  const box = { x: bx, y: by, w: Math.min(W, x1 + pad + 1) - bx, h: Math.min(H, y1 + pad + 1) - by };
+  const fix = seamCorrection(out, layer, alpha, W, box);
+
+  for (let y = 0; y < box.h; y++) {
+    for (let x = 0; x < box.w; x++) {
+      const i = (box.y + y) * W + box.x + x;
+      const a = alpha[i];
+      if (a <= 0) continue;
+      const p = i * 4;
+      const q = (y * box.w + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const v = Math.max(0, Math.min(255, resData.data[p + c] + fix[q + c] - 128));
+        baseData.data[p + c] = Math.round(baseData.data[p + c] * (1 - a) + v * a);
+      }
     }
   }
   go.putImageData(baseData, 0, 0);

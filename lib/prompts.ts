@@ -24,11 +24,15 @@ ${
     : 'Remove the furniture, decor and loose objects in the masked region.'
 }
 Remove those objects completely, including any shadows, reflections and cast light that come from them.
+The masked region may already be pre-filled with a soft, blurry blend of the surrounding colors as a placeholder. Treat that placeholder as a rough hint of the surface behind, never as something to keep: replace it with real, sharp surface texture.
 
 Then rebuild what the camera would have seen if they had never been there:
 - Complete everything that was partly hidden. Continue cabinets, cabinet doors and drawers, countertops, toe kicks, shelving, built-ins, wainscoting, baseboards, trim, windows, radiators, wall surfaces and floor patterns through the removed area — matching their existing style, material, color, hardware, panel sizes, spacing and alignment, and following the room's perspective lines and vanishing points.
 - Infer hidden parts from the visible parts: if a run of cabinets disappears behind the removed object, continue the same cabinets with the same doors and handles until they meet the next visible element; if flooring runs underneath, continue the same planks or tiles with correct alignment and grout lines.
+- Surfaces that objects were sitting on (cabinet tops, shelves, counters, tables, the floor) keep their exact edge, height and depth. Never extend, raise or enlarge a cabinet, shelf, wall or soffit into the cleared space. Above a cabinet top, what belongs behind the removed objects is the bare wall, continued from the wall visible beside them.
+- Only continue an element where it was actually hidden behind a removed object, and only to the extent its visible parts imply. Anything not hidden by a removed object stays exactly as it is, including vents, outlets and fixtures.
 - The rebuilt area must be as sharp and detailed as the rest of the photo — no smudges, blur, ghost outlines, flat patches or obviously repeated texture.
+- A plain wall or ceiling stays one continuous surface: same paint color and sheen as the wall around it, with only the gentle light falloff already visible on that wall, and no trace of where anything used to hang or stand.
 
 The result must look like this same room photographed at the same moment without what was removed. Do not add new furniture, rugs, plants, art or decor, and do not repaint, re-texture or reshape any wall, floor, cabinet or window beyond completing what was hidden.`;
 

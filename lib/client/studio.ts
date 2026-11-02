@@ -397,7 +397,7 @@ async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: 
   const src = region ? cropCanvas(source, region) : source;
   const m = region ? cropCanvas(mask, region) : mask;
 
-  const inputs = await buildEditInputs(src, m, model, quality);
+  const inputs = await buildEditInputs(src, m, model, quality, params.mode === 'clear');
   const resultBlob = await designEdit({ ...inputs, quality, model, params, reference });
   const result = await blobToImage(resultBlob);
   const patch = compositeEdit(src, result, m);
