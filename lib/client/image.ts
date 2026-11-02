@@ -255,9 +255,52 @@ function membraneFill(v: Float32Array, known: Uint8Array, w: number, h: number, 
 }
 
 /**
+ * True when the cells bordering the hole are all roughly one surface (a
+ * plain wall, one floor). Lighting gradients pass; a cabinet edge or a
+ * doorway on the border does not.
+ */
+function borderIsOneSurface(v: Float32Array, known: Uint8Array, w: number, h: number) {
+  const ring: number[] = [];
+  for (let i = 0; i < known.length; i++) {
+    if (!known[i]) continue;
+    const x = i % w;
+    const y = (i - x) / w;
+    let near = false;
+    for (let dy = -2; dy <= 2 && !near; dy++) {
+      for (let dx = -2; dx <= 2 && !near; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && ny >= 0 && nx < w && ny < h && !known[ny * w + nx]) near = true;
+      }
+    }
+    if (near) ring.push(i);
+  }
+  if (ring.length < 8) return false;
+
+  // Compare tint and brightness separately: light falloff across one wall
+  // changes brightness a lot but tint barely, while wood next to paint
+  // differs in tint, and a dark counter next to a pale wall in brightness.
+  const lum = (i: number) => Math.max(1, v[i * 3] + v[i * 3 + 1] + v[i * 3 + 2]);
+  const tint = (i: number) => [v[i * 3] / lum(i), v[i * 3 + 1] / lum(i)];
+  const mid = (xs: number[]) => xs.sort((a, b) => a - b)[xs.length >> 1];
+  const mL = mid(ring.map(lum));
+  const mR = mid(ring.map((i) => tint(i)[0]));
+  const mG = mid(ring.map((i) => tint(i)[1]));
+  const close = ring.filter((i) => {
+    const [r, g] = tint(i);
+    const ratio = lum(i) / mL;
+    return Math.hypot(r - mR, g - mG) < 0.035 && ratio > 0.65 && ratio < 1.5;
+  }).length;
+  return close / ring.length >= 0.92;
+}
+
+/**
  * Smooth RGB fill of the region `hole` (alpha canvas, same size as `src`)
  * from the pixels around it, returned at full size. Used to blank out an
  * object before the model sees it, so it has nothing to leave a ghost of.
+ * Returns null when the hole borders several different surfaces: there a
+ * smooth fill smears them together (cabinet brown bleeding up a wall), and
+ * the model reads the smear as more cabinet.
  */
 function smoothFill(src: HTMLCanvasElement, hole: HTMLCanvasElement) {
   const { width: w, height: h } = src;
@@ -270,6 +313,7 @@ function smoothFill(src: HTMLCanvasElement, hole: HTMLCanvasElement) {
     known[i] = ha[i * 4 + 3] < 3 ? 1 : 0;
     for (let c = 0; c < 3; c++) v[i * 3 + c] = px[i * 4 + c];
   }
+  if (!borderIsOneSurface(v, known, gw, gh)) return null;
   const filled = membraneFill(v, known, gw, gh, 3);
   const small = makeCanvas(gw, gh);
   const gs = ctx2d(small);
@@ -316,7 +360,8 @@ export async function buildEditInputs(
     // surrounding colors first; the model only has to add real texture.
     const hole = makeCanvas(send.w, send.h);
     ctx2d(hole).drawImage(grown, 0, 0, send.w, send.h);
-    gi.drawImage(smoothFill(img, hole), 0, 0);
+    const fill = smoothFill(img, hole);
+    if (fill) gi.drawImage(fill, 0, 0);
   }
 
   const m = makeCanvas(send.w, send.h);
