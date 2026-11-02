@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: 'Room to Shop — design your space, shop the look',
   description:
     'Upload a photo of your room, clear it out, try new furniture with AI or real products, and shop every piece.',
+  appleWebApp: { title: 'Room to Shop', capable: true, statusBarStyle: 'default' },
 };
 
 export const viewport: Viewport = {

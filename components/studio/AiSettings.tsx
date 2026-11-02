@@ -4,13 +4,9 @@ import { useState } from 'react';
 import { IconChevronDown, IconCoin } from '@tabler/icons-react';
 import { setAiPrefs, useStudio } from '@/lib/client/studio';
 import { pickSendSize } from '@/lib/client/image';
-import { IMAGE_MODELS, MODE_DEFAULTS, estimateCost, formatCost, type AiMode, type Quality } from '@/lib/models';
+import { IMAGE_MODELS, MODE_DEFAULTS, QUALITY_LABELS, estimateCost, formatCost, type AiMode, type Quality } from '@/lib/models';
 
-const QUALITY: { id: Quality; label: string }[] = [
-  { id: 'low', label: 'Draft' },
-  { id: 'medium', label: 'Standard' },
-  { id: 'high', label: 'Best' },
-];
+const QUALITY = (Object.keys(QUALITY_LABELS) as Quality[]).map((id) => ({ id, label: QUALITY_LABELS[id] }));
 
 /** Estimated cost of one edit on this photo, for the given task (default: the one being shown). */
 export function useEditCost(mode?: AiMode) {

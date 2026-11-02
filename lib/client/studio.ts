@@ -33,6 +33,7 @@ import {
   type DesignItem,
   type Project,
   type Sticker,
+  type Version,
 } from './db';
 import type { Box, EditParams, Product } from '../types';
 import { DEFAULT_MODEL, DEFAULT_QUALITY, MODE_DEFAULTS, type AiMode, type Quality } from '../models';
@@ -77,7 +78,7 @@ interface State {
   aiMode: AiMode;
   aiPrefs: AiPrefs;
   selected: string | null;
-  busy: { label: string; startedAt: number } | null;
+  busy: { label: string; startedAt: number; stoppable?: boolean } | null;
   compare: boolean;
   lens: LensState;
   toast: Toast | null;
@@ -256,11 +257,11 @@ export function unloadStudio() {
 
 // ── Versions ──────────────────────────────────────────────
 
-async function commitVersion(blob: Blob, label: string, item?: Omit<DesignItem, 'id' | 'versionId'>) {
+async function commitVersion(blob: Blob, label: string, item?: Omit<DesignItem, 'id' | 'versionId'>, ai?: Version['ai']) {
   const p = get().project!;
   const id = await storeBlob(blob);
   // Never discard history: editing from an older version starts a new branch instead.
-  const versions = [...p.versions, { id, label, createdAt: Date.now(), parentId: p.versions[p.current].id }];
+  const versions = [...p.versions, { id, label, createdAt: Date.now(), parentId: p.versions[p.current].id, ai }];
   const items = [...p.items];
   const newItem = item ? { ...item, id: uid(), versionId: id } : undefined;
   if (newItem) items.push(newItem);
@@ -377,8 +378,20 @@ export function invertMask() {
 
 // ── AI edits ──────────────────────────────────────────────
 
-function busy(label: string) {
-  set({ busy: { label, startedAt: Date.now() } });
+function busy(label: string, stoppable = false) {
+  set({ busy: { label, startedAt: Date.now(), stoppable } });
+}
+
+let editAbort: AbortController | null = null;
+
+/** Cancels the AI edit in progress; the photo stays as it was. */
+export function stopEdit() {
+  editAbort?.abort();
+}
+
+function editFailed(e: unknown) {
+  if ((e as Error).name === 'AbortError') toast('Stopped. Nothing was changed.');
+  else toast((e as Error).message, 'error');
 }
 
 function editLabel(p: EditParams) {
@@ -398,16 +411,23 @@ async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: 
   const m = region ? cropCanvas(mask, region) : mask;
 
   const inputs = await buildEditInputs(src, m, model, quality, params.mode === 'clear');
-  const resultBlob = await designEdit({ ...inputs, quality, model, params, reference });
+  editAbort = new AbortController();
+  let resultBlob: Blob;
+  try {
+    resultBlob = await designEdit({ ...inputs, quality, model, params, reference, signal: editAbort.signal });
+  } finally {
+    editAbort = null;
+  }
+  const ai = { model, quality };
   const result = await blobToImage(resultBlob);
   const patch = compositeEdit(src, result, m);
-  if (!region) return toBlob(patch, 'image/jpeg', 0.93);
+  if (!region) return { blob: await toBlob(patch, 'image/jpeg', 0.93), ai };
 
   const out = makeCanvas(W, H);
   const g = ctx2d(out);
   g.drawImage(source, 0, 0);
   g.drawImage(patch, region.x, region.y);
-  return toBlob(out, 'image/jpeg', 0.93);
+  return { blob: await toBlob(out, 'image/jpeg', 0.93), ai };
 }
 
 export async function runEdit(params: EditParams) {
@@ -420,14 +440,15 @@ export async function runEdit(params: EditParams) {
   }
   const project = get().project!;
   const box = padBox(maskBounds(mask)!, 0.04, project.width, project.height);
-  busy(params.mode === 'clear' ? 'Clearing the space' : 'Designing your piece');
+  busy(params.mode === 'clear' ? 'Clearing the space' : 'Designing your piece', true);
   reveal('.stage-wrap');
   try {
-    const out = await runMaskedEdit(base, mask, params);
+    const { blob, ai } = await runMaskedEdit(base, mask, params);
     const item = await commitVersion(
-      out,
+      blob,
       editLabel(params),
       params.mode === 'add' ? { kind: 'generated', label: params.text!.trim(), box } : undefined,
+      ai,
     );
     clearMask();
     set({ maskHistory: [] });
@@ -437,7 +458,7 @@ export async function runEdit(params: EditParams) {
       toast('Done. Use the history strip to compare or undo.', 'success');
     }
   } catch (e) {
-    toast((e as Error).message, 'error');
+    editFailed(e);
   } finally {
     set({ busy: null });
   }
@@ -727,7 +748,7 @@ export async function flattenSticker(id: string) {
 export async function blendSticker(id: string) {
   const s = get().project?.stickers.find((x) => x.id === id);
   if (!s || get().busy) return;
-  busy('Blending into your room');
+  busy('Blending into your room', true);
   reveal('.stage-wrap');
   try {
     const composed = await flattened(s);
@@ -743,17 +764,17 @@ export async function blendSticker(id: string) {
     g.restore();
 
     const reference = await getBlob(s.origBlobId);
-    const out = await runMaskedEdit(composed, m, { mode: 'blend', text: s.label.slice(0, 120) }, reference);
-    await commitVersion(out, `Placed ${s.label.slice(0, 40)}`, {
-      kind: s.generated ? 'generated' : 'product',
-      label: s.label,
-      box: stickerBox(s, W, H),
-      product: s.product,
-    });
+    const { blob, ai } = await runMaskedEdit(composed, m, { mode: 'blend', text: s.label.slice(0, 120) }, reference);
+    await commitVersion(
+      blob,
+      `Placed ${s.label.slice(0, 40)}`,
+      { kind: s.generated ? 'generated' : 'product', label: s.label, box: stickerBox(s, W, H), product: s.product },
+      ai,
+    );
     removeSticker(id);
     toast('Blended in. Compare with the history strip below.', 'success');
   } catch (e) {
-    toast((e as Error).message, 'error');
+    editFailed(e);
   } finally {
     set({ busy: null });
   }

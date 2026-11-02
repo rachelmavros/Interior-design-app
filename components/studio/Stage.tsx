@@ -276,7 +276,7 @@ export function Stage() {
           />
 
           {showHint && <div className="stage-hint">{HINTS[tool]}</div>}
-          {busy && <BusyOverlay label={busy.label} startedAt={busy.startedAt} />}
+          {busy && <BusyOverlay {...busy} />}
         </div>
       )}
     </div>

@@ -90,6 +90,7 @@ export async function designEdit(opts: {
   model: string;
   params: EditParams;
   reference?: Blob;
+  signal?: AbortSignal;
 }): Promise<Blob> {
   const fd = new FormData();
   fd.append('image', opts.image, 'room.jpg');
@@ -99,7 +100,7 @@ export async function designEdit(opts: {
   fd.append('quality', opts.quality);
   fd.append('model', opts.model);
   fd.append('params', JSON.stringify(opts.params));
-  const res = await call('/api/design/edit', { method: 'POST', body: fd });
+  const res = await call('/api/design/edit', { method: 'POST', body: fd, signal: opts.signal });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     if (!data.error && (res.status === 504 || res.status === 502)) {
