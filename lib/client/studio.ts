@@ -399,6 +399,7 @@ function editLabel(p: EditParams) {
   const short = t.length > 40 ? `${t.slice(0, 40)}…` : t;
   if (p.mode === 'clear') return short ? `Removed ${short}` : 'Cleared area';
   if (p.mode === 'add') return `Added ${short}`;
+  if (p.mode === 'apply') return short ? `Inspo: ${short}` : 'Applied inspo';
   return `Placed ${short}`;
 }
 
@@ -430,7 +431,7 @@ async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: 
   return { blob: await toBlob(out, 'image/jpeg', 0.93), ai };
 }
 
-export async function runEdit(params: EditParams) {
+export async function runEdit(params: EditParams, reference?: Blob) {
   const { base, mask, busy: isBusy } = get();
   if (!base || !mask || isBusy) return;
   if (maskCoverage(mask) === 0) {
@@ -443,7 +444,7 @@ export async function runEdit(params: EditParams) {
   busy(params.mode === 'clear' ? 'Clearing the space' : 'Designing your piece', true);
   reveal('.stage-wrap');
   try {
-    const { blob, ai } = await runMaskedEdit(base, mask, params);
+    const { blob, ai } = await runMaskedEdit(base, mask, params, reference);
     const item = await commitVersion(
       blob,
       editLabel(params),

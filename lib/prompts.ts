@@ -52,6 +52,16 @@ Task: the first image is the room with a product photo roughly pasted into the m
 Re-render the product in place so it looks physically present in the room: match the room's perspective and camera angle, scale, lighting direction and color temperature; add soft contact shadows and ambient occlusion where it meets the floor or wall; remove any cut-out edges, halos or leftover background from the paste.
 Keep the product's design identical to the reference — same silhouette, proportions, color, material, fabric, legs, hardware and details. Do not redesign, restyle or substitute it. Keep it at the same position and footprint inside the masked region.`;
 
+const APPLY = (request: string) => `${PRESERVE}
+
+Task: the second image is an inspiration photo the user chose. Their request: "${request.trim()}"
+Carry out the request inside the masked region, taking the look from the inspiration photo: its material, pattern, color, finish and design (for example a tile, wallpaper, paint color, flooring, countertop, fabric, or a specific piece of furniture or decor).
+- Use only what the request is about from the inspiration photo. Ignore everything else in it: its room, furniture, people, lighting, camera angle, text and any app or website interface around it.
+- For a surface material (tile, wallpaper, paint, flooring, paneling): cover the surfaces in the masked region that the request names, lying flat on their planes and following the room's perspective. Use realistic real-world scale judged against the cabinets, counters, outlets and doors (tile size, grout lines, pattern repeat), keep rows straight and level, and stop cleanly at edges, corners, trim, cabinets, counters, windows and fixtures. Outlets, switches and fixtures on that surface stay in place on top of the new material.
+- For an object: place one piece that matches the inspiration photo's design, color and materials, at its true real-world size for this room, resting naturally with soft contact shadows.
+- Light it like the rest of the room: same light direction, color temperature and shadows, with the material's natural sheen.
+- Anything in the masked region the request doesn't ask to change stays as it is.`;
+
 export function buildPrompt(p: EditParams): string {
   switch (p.mode) {
     case 'clear':
@@ -60,6 +70,8 @@ export function buildPrompt(p: EditParams): string {
       return ADD(p.text || 'a piece of furniture', p.style);
     case 'blend':
       return BLEND(p.text);
+    case 'apply':
+      return APPLY(p.text || 'apply this look');
   }
 }
 

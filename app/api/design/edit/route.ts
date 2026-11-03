@@ -6,7 +6,7 @@ import type { EditMode, EditParams } from '@/lib/types';
 
 export const maxDuration = 300;
 
-const MODES: EditMode[] = ['clear', 'add', 'blend'];
+const MODES: EditMode[] = ['clear', 'add', 'blend', 'apply'];
 const QUALITIES = ['low', 'medium', 'high'];
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -51,7 +51,10 @@ export async function POST(req: Request) {
   if ((params.text?.length ?? 0) > 600) {
     return json({ error: 'Description is too long' }, 400);
   }
-  if (params.mode === 'add' && !params.text?.trim()) {
+  if (params.mode === 'apply' && !(reference instanceof Blob)) {
+    return json({ error: 'Attach an inspiration photo first' }, 400);
+  }
+  if ((params.mode === 'add' || params.mode === 'apply') && !params.text?.trim()) {
     return json({ error: 'Describe what you want first' }, 400);
   }
 
