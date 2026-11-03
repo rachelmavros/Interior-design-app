@@ -399,7 +399,7 @@ img { display: block; max-width: 100%; }
 .story span { display: inline-flex; gap: 4px; align-items: center; }
 .inspo-grid { columns: 4 220px; column-gap: 12px; margin-top: 12px; }
 .inspo-card { break-inside: avoid; margin: 0 0 14px; position: relative; }
-.inspo-card img { display: block; width: 100%; height: auto; border-radius: 12px; }
+.inspo-card img { display: block; width: 100%; height: auto; border-radius: 12px; cursor: zoom-in; }
 .inspo-card figcaption { padding: 4px 2px 0; display: flex; gap: 6px; align-items: flex-start; justify-content: space-between; }
 .inspo-card figcaption a { color: inherit; }
 .inspo-shop { position: absolute; left: 8px; top: 8px; background: rgba(255,255,255,.94); box-shadow: var(--shadow); }
@@ -415,3 +415,14 @@ img { display: block; max-width: 100%; }
 .inspo-heart { flex-shrink: 0; width: 30px; height: 30px; border-radius: 999px; border: none; background: none; display: grid; place-items: center; cursor: pointer; color: var(--ink-2); margin: -4px -4px 0 0; }
 .inspo-heart.on { color: var(--accent); }
 .saved-count { display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; }
+
+.lightbox { position: fixed; inset: 0; z-index: 90; background: rgba(20,17,14,.96); display: flex; flex-direction: column; padding: 48px 12px 16px; }
+.lightbox-stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; }
+.lightbox-stage img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; }
+.lightbox-close { position: absolute; top: 10px; right: 10px; border: none; background: rgba(255,255,255,.12); color: #fff; width: 38px; height: 38px; border-radius: 999px; display: grid; place-items: center; cursor: pointer; }
+.lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); border: none; background: rgba(255,255,255,.85); color: var(--ink); width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center; cursor: pointer; }
+.lightbox-nav.prev { left: 4px; }
+.lightbox-nav.next { right: 4px; }
+.lightbox-bar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding-top: 12px; }
+.lightbox-bar .btn-outline, .lightbox-bar .btn-ghost { background: rgba(255,255,255,.95); }
+.lightbox-heart.on { color: var(--accent); }

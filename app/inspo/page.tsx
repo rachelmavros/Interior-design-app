@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { IconExternalLink, IconHeart, IconHeartFilled, IconShoppingBag } from '@tabler/icons-react';
+import { IconChevronLeft, IconChevronRight, IconExternalLink, IconHeart, IconHeartFilled, IconShoppingBag, IconX } from '@tabler/icons-react';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SetupNotice } from '@/components/SetupNotice';
 import { Disclosure } from '@/components/Disclosure';
@@ -33,6 +33,89 @@ function Chips({ options, value, onChange, any }: { options: string[]; value: st
           {o || any}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** Full-screen view of one photo, with arrows (and arrow keys) to step through the rest. */
+function Lightbox({
+  photos,
+  index,
+  onIndex,
+  onClose,
+  onShop,
+  savedIds,
+}: {
+  photos: InspoPhoto[];
+  index: number;
+  onIndex: (i: number) => void;
+  onClose: () => void;
+  onShop: (p: InspoPhoto) => void;
+  savedIds: Set<string>;
+}) {
+  const p = photos[index];
+  const [big, setBig] = useState(false);
+  const [touchX, setTouchX] = useState<number | null>(null);
+  const step = (d: number) => onIndex((index + d + photos.length) % photos.length);
+
+  useEffect(() => setBig(false), [p?.id]);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft') step(-1);
+      if (e.key === 'ArrowRight') step(1);
+    };
+    window.addEventListener('keydown', key);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', key);
+      document.body.style.overflow = '';
+    };
+  });
+  if (!p) return null;
+  const isSaved = savedIds.has(p.id);
+
+  return (
+    <div className="lightbox" role="dialog" aria-modal="true" aria-label={p.alt} onClick={onClose}>
+      <button className="lightbox-close" aria-label="Close" onClick={onClose}>
+        <IconX size={22} />
+      </button>
+      <div
+        className="lightbox-stage"
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => setTouchX(e.touches[0].clientX)}
+        onTouchEnd={(e) => {
+          if (touchX === null) return;
+          const dx = e.changedTouches[0].clientX - touchX;
+          if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
+          setTouchX(null);
+        }}
+      >
+        {/* The grid-size image shows at once; the full-size one swaps in when it has loaded. */}
+        <img src={big ? p.full : p.src} alt={p.alt} />
+        {!big && p.full !== p.src && <img src={p.full} alt="" hidden onLoad={() => setBig(true)} />}
+        {photos.length > 1 && (
+          <>
+            <button className="lightbox-nav prev" aria-label="Previous photo" onClick={() => step(-1)}>
+              <IconChevronLeft size={22} />
+            </button>
+            <button className="lightbox-nav next" aria-label="Next photo" onClick={() => step(1)}>
+              <IconChevronRight size={22} />
+            </button>
+          </>
+        )}
+      </div>
+      <div className="lightbox-bar" onClick={(e) => e.stopPropagation()}>
+        <button className="btn btn-accent btn-sm" onClick={() => onShop(p)}>
+          <IconShoppingBag size={15} /> Shop this look
+        </button>
+        <button className={`btn btn-sm btn-outline lightbox-heart ${isSaved ? 'on' : ''}`} onClick={() => toggleInspo(p)} aria-pressed={isSaved}>
+          {isSaved ? <IconHeartFilled size={15} /> : <IconHeart size={15} />} {isSaved ? 'Saved' : 'Save'}
+        </button>
+        <a className="btn btn-sm btn-ghost" href={p.sourceUrl} target="_blank" rel="noopener noreferrer">
+          <IconExternalLink size={15} /> {p.provider === 'unsplash' ? 'Unsplash' : 'Source'}
+        </a>
+      </div>
     </div>
   );
 }
@@ -100,6 +183,7 @@ export default function InspoPage() {
 
   const showSaved = view === 'saved';
   const shown = showSaved ? saved : photos;
+  const [open, setOpen] = useState<number | null>(null);
 
   function shop(p: InspoPhoto) {
     reportInspoUse(p.useUrl);
@@ -176,12 +260,13 @@ export default function InspoPage() {
             </div>
           )}
           <div className="inspo-grid">
-            {shown.map((p) => (
+            {shown.map((p, i) => (
               <figure key={p.id} className="inspo-card">
                 <img
                   src={p.src}
                   alt={p.alt}
                   loading="lazy"
+                  onClick={() => setOpen(i)}
                   style={{ aspectRatio: `${p.width} / ${p.height}`, background: p.color }}
                   onError={(e) => {
                     // Some pins can't be shown outside Pinterest; drop them rather than leave a blank tile.
@@ -235,6 +320,16 @@ export default function InspoPage() {
             </div>
           )}
         </section>
+        {open !== null && (
+          <Lightbox
+            photos={shown}
+            index={Math.min(open, shown.length - 1)}
+            onIndex={setOpen}
+            onClose={() => setOpen(null)}
+            onShop={shop}
+            savedIds={savedIds}
+          />
+        )}
         <Disclosure />
       </main>
     </>
