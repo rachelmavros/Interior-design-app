@@ -6,15 +6,20 @@ import { IconExternalLink, IconShoppingBag } from '@tabler/icons-react';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SetupNotice } from '@/components/SetupNotice';
 import { Disclosure } from '@/components/Disclosure';
-import { editorialStories, inspoSearch, reportInspoUse } from '@/lib/client/api';
+import { inspoSearch, magazines as loadMagazines, reportInspoUse } from '@/lib/client/api';
 import { STYLES } from '@/lib/prompts';
-import type { InspoPhoto, Story } from '@/lib/types';
+import type { InspoPhoto, Magazine } from '@/lib/types';
 
 const ROOMS = ['Living room', 'Bedroom', 'Kitchen', 'Dining room', 'Bathroom', 'Home office', 'Entryway', 'Nursery', 'Patio'];
 
+const SOURCES: { id: InspoPhoto['provider']; label: string }[] = [
+  { id: 'pinterest', label: 'Pinterest' },
+  { id: 'unsplash', label: 'Unsplash' },
+];
+
 function query(room: string, style: string) {
   if (!room && !style) return 'interior design';
-  return `${style} ${room || 'interior'}`.trim().toLowerCase();
+  return `${style} ${room || 'interior'} interior design`.trim().toLowerCase();
 }
 
 function Chips({ options, value, onChange, any }: { options: string[]; value: string; onChange: (v: string) => void; any: string }) {
@@ -38,10 +43,11 @@ export default function InspoPage() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const [stories, setStories] = useState<Story[]>([]);
+  const [mags, setMags] = useState<Magazine[]>([]);
+  const [source, setSource] = useState<InspoPhoto['provider']>('pinterest');
 
   useEffect(() => {
-    editorialStories().then(setStories);
+    loadMagazines().then(setMags);
   }, []);
 
   const q = query(room, style);
@@ -50,7 +56,7 @@ export default function InspoPage() {
     setLoading(true);
     setError(undefined);
     setPhotos([]);
-    inspoSearch(q, 0)
+    inspoSearch(q, source, 0)
       .then((d) => {
         if (!live) return;
         setPhotos(d.photos);
@@ -61,13 +67,13 @@ export default function InspoPage() {
     return () => {
       live = false;
     };
-  }, [q]);
+  }, [q, source]);
 
   async function loadMore() {
     const next = page + 1;
     setLoading(true);
     try {
-      const d = await inspoSearch(q, next);
+      const d = await inspoSearch(q, source, next);
       setPhotos((list) => [...list, ...d.photos.filter((p) => !list.some((x) => x.id === p.id))]);
       setHasMore(d.hasMore);
       setPage(next);
@@ -78,10 +84,11 @@ export default function InspoPage() {
     }
   }
 
-  function pick(next: { room?: string; style?: string }) {
+  function pick(next: { room?: string; style?: string; source?: InspoPhoto['provider'] }) {
     setPage(0);
     if (next.room !== undefined) setRoom(next.room);
     if (next.style !== undefined) setStyle(next.style);
+    if (next.source) setSource(next.source);
   }
 
   function shop(p: InspoPhoto) {
@@ -101,27 +108,39 @@ export default function InspoPage() {
           <p className="muted">Find a room you love, then shop the look piece by piece.</p>
         </div>
 
-        {stories.length > 0 && (
-          <section style={{ marginBottom: 28 }}>
+        {mags.map((m) => (
+          <section key={m.name} style={{ marginBottom: 28 }}>
             <div className="section-head">
-              <h2 className="display" style={{ fontSize: 22 }}>From Architectural Digest</h2>
-              <span className="tiny muted">Latest stories</span>
+              <h2 className="display" style={{ fontSize: 22 }}>From {m.name}</h2>
+              <a className="tiny muted" href={m.home} target="_blank" rel="noopener noreferrer">
+                Visit site <IconExternalLink size={11} />
+              </a>
             </div>
             <div className="story-row">
-              {stories.map((s) => (
+              {m.stories.map((s) => (
                 <a key={s.link} className="story" href={s.link} target="_blank" rel="noopener noreferrer">
                   {s.image ? <img src={s.image} alt="" loading="lazy" /> : <div className="story-img" />}
                   <strong>{s.title}</strong>
                   <span className="tiny muted">
-                    {s.date && !Number.isNaN(Date.parse(s.date)) ? new Date(s.date).toLocaleDateString() : 'AD'} <IconExternalLink size={11} />
+                    {s.date && !Number.isNaN(Date.parse(s.date)) ? new Date(s.date).toLocaleDateString() : m.name} <IconExternalLink size={11} />
                   </span>
                 </a>
               ))}
             </div>
           </section>
-        )}
+        ))}
 
         <section>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 12 }}>
+            <h2 className="display" style={{ fontSize: 22 }}>Rooms to shop</h2>
+            <div className="segmented" style={{ width: 'auto' }}>
+              {SOURCES.map((s) => (
+                <button key={s.id} className={source === s.id ? 'on' : ''} onClick={() => pick({ source: s.id })}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <Chips options={ROOMS} value={room} onChange={(v) => pick({ room: v })} any="Any room" />
           <Chips options={STYLES} value={style} onChange={(v) => pick({ style: v })} any="Any style" />
           {error && <p className="small" style={{ color: 'var(--error)', marginTop: 12 }}>{error}</p>}
@@ -133,19 +152,34 @@ export default function InspoPage() {
                   alt={p.alt}
                   loading="lazy"
                   style={{ aspectRatio: `${p.width} / ${p.height}`, background: p.color }}
+                  onError={(e) => {
+                    // Some pins can't be shown outside Pinterest; drop them rather than leave a blank tile.
+                    (e.currentTarget.closest('.inspo-card') as HTMLElement | null)?.style.setProperty('display', 'none');
+                  }}
                 />
                 <button className="btn btn-sm inspo-shop" onClick={() => shop(p)}>
                   <IconShoppingBag size={14} /> Shop this look
                 </button>
                 <figcaption className="tiny muted">
-                  Photo by{' '}
-                  <a href={p.authorUrl} target="_blank" rel="noopener noreferrer">
-                    {p.author}
-                  </a>{' '}
-                  on{' '}
-                  <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer">
-                    Unsplash
-                  </a>
+                  {p.provider === 'unsplash' ? (
+                    <>
+                      Photo by{' '}
+                      <a href={p.authorUrl} target="_blank" rel="noopener noreferrer">
+                        {p.author}
+                      </a>{' '}
+                      on{' '}
+                      <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer">
+                        Unsplash
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      via{' '}
+                      <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer">
+                        {p.author}
+                      </a>
+                    </>
+                  )}
                 </figcaption>
               </figure>
             ))}

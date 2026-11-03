@@ -390,9 +390,9 @@ img { display: block; max-width: 100%; }
 .chip-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
 .chip-row .chip { flex-shrink: 0; }
 .story-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
-.story { flex: 0 0 220px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 6px; }
+.story { flex: 0 0 160px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 6px; }
 .story img, .story-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 10px; background: var(--surface-2); }
-.story strong { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.story strong { font-size: 13px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .story span { display: inline-flex; gap: 4px; align-items: center; }
 .inspo-grid { columns: 4 220px; column-gap: 12px; margin-top: 12px; }
 .inspo-card { break-inside: avoid; margin: 0 0 14px; position: relative; }

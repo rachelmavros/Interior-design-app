@@ -1,5 +1,6 @@
 import { guard, isMock, json } from '@/lib/server/guard';
 import { mockInspo } from '@/lib/server/mock';
+import { searchPins } from '@/lib/server/pins';
 import { searchPhotos } from '@/lib/server/unsplash';
 
 export const maxDuration = 30;
@@ -11,11 +12,12 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get('q') || '').trim().slice(0, 120) || 'interior design';
   const page = Math.max(0, Math.min(19, parseInt(searchParams.get('page') || '0', 10) || 0));
+  const source = searchParams.get('source') === 'unsplash' ? 'unsplash' : 'pinterest';
 
-  if (isMock()) return json({ photos: mockInspo(q, page), hasMore: page < 3 });
+  if (isMock()) return json({ photos: mockInspo(q, page, source), hasMore: page < 3 });
 
   try {
-    return json(await searchPhotos(q, page));
+    return json(source === 'pinterest' ? await searchPins(q, page) : await searchPhotos(q, page));
   } catch (e) {
     console.error('inspo', e);
     return json({ error: (e as Error).message || 'Could not load photos' }, 502);

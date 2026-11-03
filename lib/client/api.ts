@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import type { AppConfig, EditParams, InspoPhoto, Product, ProductSearchResponse, Story } from '../types';
+import type { AppConfig, EditParams, InspoPhoto, Magazine, Product, ProductSearchResponse } from '../types';
 
 const CODE_KEY = 'rts-access-code';
 
@@ -116,16 +116,16 @@ export async function linkPreview(url: string) {
   return jsonOrThrow<{ image: string; product?: Product }>(res);
 }
 
-export async function inspoSearch(q: string, page = 0) {
-  const res = await call(`/api/inspo?q=${encodeURIComponent(q)}&page=${page}`);
+export async function inspoSearch(q: string, source: InspoPhoto['provider'], page = 0) {
+  const res = await call(`/api/inspo?q=${encodeURIComponent(q)}&source=${source}&page=${page}`);
   return jsonOrThrow<{ photos: InspoPhoto[]; hasMore: boolean }>(res);
 }
 
-export async function editorialStories(): Promise<Story[]> {
+export async function magazines(): Promise<Magazine[]> {
   const data = await fetch('/api/inspo/editorial')
     .then((r) => r.json())
     .catch(() => ({}));
-  return data.stories || [];
+  return data.magazines || [];
 }
 
 /** Fire-and-forget: report that an Unsplash photo was used. */
