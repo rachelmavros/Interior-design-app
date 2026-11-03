@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { IconBrush, IconPencil, IconSparkles, IconWand } from '@tabler/icons-react';
+import { IconBrush, IconInfoCircle, IconPencil, IconSparkles, IconWand } from '@tabler/icons-react';
 import { runEdit, setAiMode, toast, useStudio } from '@/lib/client/studio';
 import { AiSettings, useEditCost } from './AiSettings';
 import { ImportItem } from './ImportItem';
@@ -22,6 +22,7 @@ export function DesignPanel() {
   const tool = useStudio((s) => s.tool);
   const [mode, setMode] = useState<Mode>('clear');
   const [removeText, setRemoveText] = useState('');
+  const [showWhy, setShowWhy] = useState(false);
   const [item, setItem] = useState('');
   const [style, setStyle] = useState<string | undefined>();
   const itemRef = useRef<HTMLTextAreaElement>(null);
@@ -95,8 +96,20 @@ export function DesignPanel() {
               <div className="describe-head">
                 <IconSparkles size={16} />
                 <span>
-                  <strong>Describe it for much better results</strong>
-                  <span className="tiny muted">The AI erases and rebuilds far more accurately when you say what’s going and what belongs behind it.</span>
+                  <strong>
+                    Describe it for much better results
+                    <button
+                      className="info-btn"
+                      aria-label="Why describe it?"
+                      aria-expanded={showWhy}
+                      onClick={() => setShowWhy((v) => !v)}
+                    >
+                      <IconInfoCircle size={15} />
+                    </button>
+                  </strong>
+                  {showWhy && (
+                    <span className="tiny muted">The AI erases and rebuilds far more accurately when you say what’s going and what belongs behind it.</span>
+                  )}
                 </span>
               </div>
               <div>
