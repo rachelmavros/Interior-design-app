@@ -14,7 +14,6 @@ import {
   ctx2d,
   dims,
   loadImage,
-  lockSurfaces,
   makeCanvas,
   maskBounds,
   maskCoverage,
@@ -409,9 +408,7 @@ async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: 
   const b = maskBounds(mask)!;
   const region = focusRegion(b, W, H);
   const src = region ? cropCanvas(source, region) : source;
-  const painted = region ? cropCanvas(mask, region) : mask;
-  // Clearing only repaints the objects, never the surfaces they sit on.
-  const m = params.mode === 'clear' ? lockSurfaces(src, painted) : painted;
+  const m = region ? cropCanvas(mask, region) : mask;
 
   const inputs = await buildEditInputs(src, m, model, quality, params.mode === 'clear');
   editAbort = new AbortController();
