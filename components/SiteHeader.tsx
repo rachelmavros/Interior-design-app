@@ -13,6 +13,7 @@ export function SiteHeader({ children }: { children?: React.ReactNode }) {
       {children}
       <nav className="nav">
         <Link href="/#rooms">My rooms</Link>
+        <Link href="/inspo">Inspo</Link>
         <Link href="/shop">Shop a photo</Link>
       </nav>
     </header>

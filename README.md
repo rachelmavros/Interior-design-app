@@ -28,6 +28,7 @@ Image models redraw the whole picture even when given a mask, so walls and windo
    | `SERP_KEY` | yes | Google Lens + Google Shopping via [SerpAPI](https://serpapi.com) |
    | `IMGBB_KEY` | yes | Temporary hosting of your crop so Lens can see it (auto-deletes after 10 min) |
    | `OPENAI_API_KEY` | yes | AI edits. Your OpenAI org may need [verification](https://platform.openai.com/settings/organization/general) to use image models |
+   | `UNSPLASH_ACCESS_KEY` | yes | Inspo photos. Free: [unsplash.com/developers](https://unsplash.com/developers) → New Application → Access Key |
    | `OPENAI_IMAGE_MODEL` | no | Starting model: `gpt-image-1-mini` (default, cheapest), `gpt-image-1.5`, or `gpt-image-2`. Visitors can switch in the studio |
    | `OPENAI_ALLOWED_MODELS` | no | Comma-separated list to restrict which models visitors may pick (e.g. hide Premium) |
    | `CONTACT_EMAIL` | no | Shown on the privacy page |

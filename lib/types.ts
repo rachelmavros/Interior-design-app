@@ -50,3 +50,27 @@ export interface Box {
   w: number;
   h: number;
 }
+
+export interface InspoPhoto {
+  id: string;
+  /** Grid-size image. */
+  src: string;
+  /** Larger image for shopping. */
+  full: string;
+  width: number;
+  height: number;
+  color: string;
+  alt: string;
+  author: string;
+  authorUrl: string;
+  sourceUrl: string;
+  /** Unsplash's "this photo was used" endpoint. */
+  useUrl?: string;
+}
+
+export interface Story {
+  title: string;
+  link: string;
+  image?: string;
+  date: string;
+}

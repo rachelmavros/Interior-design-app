@@ -1,4 +1,4 @@
-import type { Product } from '../types';
+import type { InspoPhoto, Product, Story } from '../types';
 
 const RETAILERS = ['Wayfair', 'West Elm', 'Target', 'Article', 'Crate & Barrel', 'IKEA', 'Amazon', 'CB2'];
 const ITEMS = [
@@ -53,4 +53,37 @@ export function mockEditSvg(width: number, height: number, label: string) {
   <rect width="100%" height="100%" fill="url(#p)"/>
   <text x="50%" y="50%" font-family="sans-serif" font-size="${Math.round(width / 28)}" text-anchor="middle" fill="#7a6650">MOCK EDIT: ${safe}</text>
 </svg>`;
+}
+
+function roomSvg(wall: string, floor: string, piece: string, label: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1100"><rect width="900" height="760" fill="${wall}"/><rect y="760" width="900" height="340" fill="${floor}"/><rect x="560" y="180" width="200" height="260" fill="#f8f4ec" stroke="#d9cdbd" stroke-width="8"/><rect x="170" y="600" width="520" height="190" rx="50" fill="${piece}"/><rect x="170" y="520" width="520" height="130" rx="44" fill="${piece}" opacity=".85"/><text x="450" y="1060" font-family="sans-serif" font-size="34" text-anchor="middle" fill="#fff">${label}</text></svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+}
+
+export function mockInspo(query: string, page: number): InspoPhoto[] {
+  return Array.from({ length: 12 }, (_, i) => {
+    const n = page * 12 + i;
+    const src = roomSvg(COLORS[n % COLORS.length], COLORS[(n + 3) % COLORS.length], COLORS[(n + 5) % COLORS.length], `${query} ${n + 1}`);
+    return {
+      id: `mock-${query}-${n}`,
+      src,
+      full: src,
+      width: 900,
+      height: i % 3 ? 1100 : 700,
+      color: COLORS[n % COLORS.length],
+      alt: `${query} mock ${n + 1}`,
+      author: 'Demo photographer',
+      authorUrl: 'https://unsplash.com',
+      sourceUrl: 'https://unsplash.com',
+    };
+  });
+}
+
+export function mockStories(): Story[] {
+  return Array.from({ length: 6 }, (_, i) => ({
+    title: ['Inside a sunlit Brooklyn brownstone', 'The 12 best paint colors of the year', 'A Japandi cabin in the woods', 'How to style a sideboard', 'Designers on the return of brown', 'A tiny kitchen, totally transformed'][i],
+    link: 'https://www.architecturaldigest.com/',
+    image: roomSvg(COLORS[i], COLORS[(i + 2) % COLORS.length], COLORS[(i + 4) % COLORS.length], 'AD'),
+    date: new Date(Date.now() - i * 86400000).toUTCString(),
+  }));
 }
