@@ -400,7 +400,7 @@ img { display: block; max-width: 100%; }
 .inspo-grid { columns: 4 220px; column-gap: 12px; margin-top: 12px; }
 .inspo-card { break-inside: avoid; margin: 0 0 14px; position: relative; }
 .inspo-card img { display: block; width: 100%; height: auto; border-radius: 12px; }
-.inspo-card figcaption { padding: 4px 2px 0; }
+.inspo-card figcaption { padding: 4px 2px 0; display: flex; gap: 6px; align-items: flex-start; justify-content: space-between; }
 .inspo-card figcaption a { color: inherit; }
 .inspo-shop { position: absolute; left: 8px; top: 8px; background: rgba(255,255,255,.94); box-shadow: var(--shadow); }
 @media (max-width: 640px) {
@@ -412,3 +412,6 @@ img { display: block; max-width: 100%; }
 .inspo-attached img { width: 56px; height: 56px; object-fit: cover; border-radius: 7px; flex-shrink: 0; }
 .inspo-attached span { flex: 1; }
 .link-btn { border: none; background: none; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.inspo-heart { flex-shrink: 0; width: 30px; height: 30px; border-radius: 999px; border: none; background: none; display: grid; place-items: center; cursor: pointer; color: var(--ink-2); margin: -4px -4px 0 0; }
+.inspo-heart.on { color: var(--accent); }
+.saved-count { display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; }
