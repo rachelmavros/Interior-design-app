@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
-import type { Product } from '../types';
+import type { InspoPhoto, Product } from '../types';
 import { uid } from './db';
 
 export interface SavedItem {
@@ -21,10 +21,12 @@ interface Library {
   recent: Product[];
   saved: SavedItem[];
   folders: Folder[];
+  /** Inspo photos hearted on the Inspo page, newest first. */
+  inspo: InspoPhoto[];
 }
 
 /** Shopping history and saved boards, shared by every room on this device. */
-export const useLibrary = create<Library>(() => ({ loaded: false, recent: [], saved: [], folders: [] }));
+export const useLibrary = create<Library>(() => ({ loaded: false, recent: [], saved: [], folders: [], inspo: [] }));
 const set = useLibrary.setState;
 const get = useLibrary.getState;
 
@@ -41,8 +43,8 @@ export function loadLibrary() {
 }
 
 function save() {
-  const { recent, saved, folders } = get();
-  idbSet(KEY, { recent, saved, folders }, store).catch((e) => console.error('library save failed', e));
+  const { recent, saved, folders, inspo } = get();
+  idbSet(KEY, { recent, saved, folders, inspo }, store).catch((e) => console.error('library save failed', e));
 }
 
 async function update(fn: (l: Library) => Partial<Library>) {
@@ -82,4 +84,12 @@ export function deleteFolder(id: string) {
     folders: l.folders.filter((f) => f.id !== id),
     saved: l.saved.map((s) => (s.folderId === id ? { ...s, folderId: null } : s)),
   }));
+}
+
+export function toggleInspo(photo: InspoPhoto) {
+  update((l) =>
+    l.inspo.some((x) => x.id === photo.id)
+      ? { inspo: l.inspo.filter((x) => x.id !== photo.id) }
+      : { inspo: [photo, ...l.inspo] },
+  );
 }

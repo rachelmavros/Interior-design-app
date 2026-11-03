@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { IconExternalLink, IconShoppingBag } from '@tabler/icons-react';
+import { IconExternalLink, IconHeart, IconHeartFilled, IconShoppingBag } from '@tabler/icons-react';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SetupNotice } from '@/components/SetupNotice';
 import { Disclosure } from '@/components/Disclosure';
 import { inspoSearch, magazines as loadMagazines, reportInspoUse } from '@/lib/client/api';
+import { loadLibrary, toggleInspo, useLibrary } from '@/lib/client/library';
 import { STYLES } from '@/lib/prompts';
 import type { InspoPhoto, Magazine } from '@/lib/types';
 
 const ROOMS = ['Living room', 'Bedroom', 'Kitchen', 'Dining room', 'Bathroom', 'Home office', 'Entryway', 'Nursery', 'Patio'];
+
+type View = InspoPhoto['provider'] | 'saved';
 
 const SOURCES: { id: InspoPhoto['provider']; label: string }[] = [
   { id: 'pinterest', label: 'Pinterest' },
@@ -45,9 +48,13 @@ export default function InspoPage() {
   const [error, setError] = useState<string>();
   const [mags, setMags] = useState<Magazine[]>([]);
   const [source, setSource] = useState<InspoPhoto['provider']>('pinterest');
+  const [view, setView] = useState<View>('pinterest');
+  const saved = useLibrary((l) => l.inspo);
+  const savedIds = new Set(saved.map((p) => p.id));
 
   useEffect(() => {
     loadMagazines().then(setMags);
+    loadLibrary();
   }, []);
 
   const q = query(room, style);
@@ -91,6 +98,9 @@ export default function InspoPage() {
     if (next.source) setSource(next.source);
   }
 
+  const showSaved = view === 'saved';
+  const shown = showSaved ? saved : photos;
+
   function shop(p: InspoPhoto) {
     reportInspoUse(p.useUrl);
     router.push(`/shop?photo=${encodeURIComponent(p.full)}`);
@@ -132,20 +142,41 @@ export default function InspoPage() {
 
         <section>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 12 }}>
-            <h2 className="display" style={{ fontSize: 22 }}>Rooms to shop</h2>
+            <h2 className="display" style={{ fontSize: 22, whiteSpace: 'nowrap' }}>Rooms to shop</h2>
             <div className="segmented" style={{ width: 'auto' }}>
               {SOURCES.map((s) => (
-                <button key={s.id} className={source === s.id ? 'on' : ''} onClick={() => pick({ source: s.id })}>
+                <button
+                  key={s.id}
+                  className={view === s.id ? 'on' : ''}
+                  onClick={() => {
+                    setView(s.id);
+                    pick({ source: s.id });
+                  }}
+                >
                   {s.label}
                 </button>
               ))}
+              <button className={showSaved ? 'on' : ''} onClick={() => setView('saved')} aria-label={`Saved (${saved.length})`}>
+                <span className="saved-count">
+                  <IconHeartFilled size={13} /> {saved.length}
+                </span>
+              </button>
             </div>
           </div>
-          <Chips options={ROOMS} value={room} onChange={(v) => pick({ room: v })} any="Any room" />
-          <Chips options={STYLES} value={style} onChange={(v) => pick({ style: v })} any="Any style" />
-          {error && <p className="small" style={{ color: 'var(--error)', marginTop: 12 }}>{error}</p>}
+          {!showSaved && (
+            <>
+              <Chips options={ROOMS} value={room} onChange={(v) => pick({ room: v })} any="Any room" />
+              <Chips options={STYLES} value={style} onChange={(v) => pick({ style: v })} any="Any style" />
+            </>
+          )}
+          {!showSaved && error && <p className="small" style={{ color: 'var(--error)', marginTop: 12 }}>{error}</p>}
+          {showSaved && saved.length === 0 && (
+            <div className="empty" style={{ marginTop: 12 }}>
+              Nothing saved yet. Tap the heart on any photo to keep it here.
+            </div>
+          )}
           <div className="inspo-grid">
-            {photos.map((p) => (
+            {shown.map((p) => (
               <figure key={p.id} className="inspo-card">
                 <img
                   src={p.src}
@@ -161,6 +192,7 @@ export default function InspoPage() {
                   <IconShoppingBag size={14} /> Shop this look
                 </button>
                 <figcaption className="tiny muted">
+                  <span>
                   {p.provider === 'unsplash' ? (
                     <>
                       Photo by{' '}
@@ -180,13 +212,22 @@ export default function InspoPage() {
                       </a>
                     </>
                   )}
+                  </span>
+                  <button
+                    className={`inspo-heart ${savedIds.has(p.id) ? 'on' : ''}`}
+                    onClick={() => toggleInspo(p)}
+                    aria-label={savedIds.has(p.id) ? 'Remove from saved' : 'Save'}
+                    aria-pressed={savedIds.has(p.id)}
+                  >
+                    {savedIds.has(p.id) ? <IconHeartFilled size={17} /> : <IconHeart size={17} />}
+                  </button>
                 </figcaption>
               </figure>
             ))}
           </div>
-          {loading && <span className="spinner" style={{ display: 'block', margin: '20px auto' }} />}
-          {!loading && !error && photos.length === 0 && <div className="empty">No photos for that combination. Try another style.</div>}
-          {!loading && hasMore && (
+          {!showSaved && loading && <span className="spinner" style={{ display: 'block', margin: '20px auto' }} />}
+          {!showSaved && !loading && !error && photos.length === 0 && <div className="empty">No photos for that combination. Try another style.</div>}
+          {!showSaved && !loading && hasMore && (
             <div style={{ textAlign: 'center', marginTop: 16 }}>
               <button className="btn btn-outline" onClick={loadMore}>
                 Load more
