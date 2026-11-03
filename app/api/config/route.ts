@@ -5,7 +5,7 @@ import type { AppConfig } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 
 export function GET() {
-  const missing = ['SERP_KEY', 'IMGBB_KEY', 'OPENAI_API_KEY'].filter((k) => !process.env[k]);
+  const missing = ['SERP_KEY', 'IMGBB_KEY', 'OPENAI_API_KEY', 'UNSPLASH_ACCESS_KEY'].filter((k) => !process.env[k]);
   const body: AppConfig = {
     model: defaultModel(),
     models: allowedModels(),

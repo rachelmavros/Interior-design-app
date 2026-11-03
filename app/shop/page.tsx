@@ -11,7 +11,7 @@ import { Disclosure } from '@/components/Disclosure';
 import { BoxSelect } from '@/components/BoxSelect';
 import { lensSearch } from '@/lib/client/api';
 import { createProject, getBlob, listProjects, type Project } from '@/lib/client/db';
-import { cropToBase64, loadImage, prepareUpload } from '@/lib/client/image';
+import { cropToBase64, loadImage, prepareUpload, proxied } from '@/lib/client/image';
 import type { Box, Product } from '@/lib/types';
 
 /** A saved room's current version, as a pickable card. */
@@ -55,6 +55,19 @@ export default function ShopPage() {
 
   useEffect(() => {
     listProjects().then(setRooms).catch(() => setRooms([]));
+  }, []);
+
+  // Arriving from Inspo with ?photo=<url>: open that photo right away.
+  useEffect(() => {
+    const src = new URLSearchParams(window.location.search).get('photo');
+    if (!src) return;
+    setPreparing(true);
+    fetch(proxied(src))
+      .then((r) => (r.ok ? r.blob() : Promise.reject()))
+      .then((b) => prepareUpload(b, 2400))
+      .then(({ blob }) => openPhoto(blob))
+      .catch(() => setError('That photo couldn’t be opened.'))
+      .finally(() => setPreparing(false));
   }, []);
 
   useEffect(() => () => {
