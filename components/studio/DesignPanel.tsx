@@ -5,6 +5,7 @@ import { IconBrush, IconInfoCircle, IconPencil, IconSparkles, IconWand } from '@
 import { runEdit, setAiMode, toast, useStudio } from '@/lib/client/studio';
 import { AiSettings, useEditCost } from './AiSettings';
 import { ImportItem } from './ImportItem';
+import { InspoAttach, type Inspo } from './InspoAttach';
 import { QUICK_ITEMS, STYLES } from '@/lib/prompts';
 
 type Mode = 'clear' | 'add' | 'own';
@@ -25,6 +26,7 @@ export function DesignPanel() {
   const [showWhy, setShowWhy] = useState(false);
   const [item, setItem] = useState('');
   const [style, setStyle] = useState<string | undefined>();
+  const [inspo, setInspo] = useState<Inspo | null>(null);
   const itemRef = useRef<HTMLTextAreaElement>(null);
 
   const painted = coverage > 0;
@@ -44,7 +46,10 @@ export function DesignPanel() {
       return;
     }
     if (mode === 'clear') runEdit({ mode: 'clear', text: removeText });
-    if (mode === 'add') runEdit({ mode: 'add', text: item, style });
+    if (mode === 'add') {
+      if (inspo) runEdit({ mode: 'apply', text: item }, inspo.blob);
+      else runEdit({ mode: 'add', text: item, style });
+    }
   }
 
   return (
@@ -67,7 +72,12 @@ export function DesignPanel() {
       </div>
 
       {mode === 'own' ? (
-        <ImportItem />
+        <ImportItem
+          onUseInspo={() => {
+            setMode('add');
+            setAiMode('add');
+          }}
+        />
       ) : (
         <>
           <div className={`card-soft ${painted ? '' : 'needs-paint'}`}>
@@ -80,7 +90,11 @@ export function DesignPanel() {
               ) : (
                 <span>
                   <strong>Step 1:</strong>{' '}
-                  {mode === 'clear' ? 'paint over the furniture you want gone.' : 'paint the spot where the new piece should go.'}
+                  {mode === 'clear'
+                    ? 'paint over the furniture you want gone.'
+                    : inspo
+                      ? 'paint the area to change, like the backsplash.'
+                      : 'paint the spot where the new piece should go.'}
                 </span>
               )}
             </div>
@@ -129,7 +143,24 @@ export function DesignPanel() {
             </div>
           )}
 
-          {mode === 'add' && (
+          {mode === 'add' && <InspoAttach value={inspo} onChange={setInspo} />}
+
+          {mode === 'add' && inspo && (
+            <div>
+              <label className="label" htmlFor="item">What should it be used for?</label>
+              <textarea
+                ref={itemRef}
+                id="item"
+                className="textarea"
+                value={item}
+                onChange={(e) => setItem(e.target.value)}
+                placeholder="e.g. replace the backsplash between the counter and upper cabinets with this green tile"
+                maxLength={600}
+              />
+            </div>
+          )}
+
+          {mode === 'add' && !inspo && (
             <>
               <div>
                 <span className="label">Quick picks</span>
@@ -179,12 +210,12 @@ export function DesignPanel() {
               </>
             ) : needsText ? (
               <>
-                <IconPencil size={18} /> Describe the piece first
+                <IconPencil size={18} /> {inspo ? 'Say how to use it first' : 'Describe the piece first'}
               </>
             ) : (
               <>
                 {mode === 'clear' ? <IconWand size={18} /> : <IconSparkles size={18} />}
-                {mode === 'clear' ? 'Clear painted area' : 'Design it here'}
+                {mode === 'clear' ? 'Clear painted area' : inspo ? 'Apply it here' : 'Design it here'}
                 {cost && <span className="btn-cost">{cost}</span>}
               </>
             )}

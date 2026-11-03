@@ -16,7 +16,7 @@ interface Source {
   revoke?: boolean;
 }
 
-export function ImportItem() {
+export function ImportItem({ onUseInspo }: { onUseInspo?: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [link, setLink] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,6 +80,14 @@ export function ImportItem() {
           </button>
         </form>
       </div>
+      {onUseInspo && (
+        <p className="tiny muted" style={{ margin: '10px 0 0' }}>
+          Want a tile, wallpaper, paint or fabric from a photo instead?{' '}
+          <button className="link-btn" onClick={onUseInspo}>
+            Use it as inspiration
+          </button>
+        </p>
+      )}
       <input
         ref={fileRef}
         type="file"

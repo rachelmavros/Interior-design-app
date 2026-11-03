@@ -25,11 +25,11 @@ export interface ProductSearchResponse {
   error?: string;
 }
 
-export type EditMode = 'clear' | 'add' | 'blend';
+export type EditMode = 'clear' | 'add' | 'blend' | 'apply';
 
 export interface EditParams {
   mode: EditMode;
-  /** clear: what to remove and what belongs behind it. add/blend: the item. */
+  /** clear: what to remove and what belongs behind it. add/blend: the item. apply: what to do with the reference photo. */
   text?: string;
   style?: string;
 }
