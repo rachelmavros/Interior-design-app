@@ -141,6 +141,9 @@ img { display: block; max-width: 100%; }
 .project-thumb { aspect-ratio: 4/3; background: var(--surface-2); object-fit: cover; width: 100%; }
 .project-meta { padding: 11px 13px; }
 .project-meta strong { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-picks { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.room-pick .project-meta { padding: 8px 10px; }
+.room-pick { display: block; width: 100%; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .project-del { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,.92); }
 .empty { border: 1.5px dashed var(--line-2); border-radius: var(--radius); padding: 36px; text-align: center; color: var(--muted); }
 .disclosure { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); line-height: 1.6; }

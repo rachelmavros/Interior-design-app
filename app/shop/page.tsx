@@ -10,9 +10,36 @@ import { SetupNotice } from '@/components/SetupNotice';
 import { Disclosure } from '@/components/Disclosure';
 import { BoxSelect } from '@/components/BoxSelect';
 import { lensSearch } from '@/lib/client/api';
-import { createProject } from '@/lib/client/db';
+import { createProject, getBlob, listProjects, type Project } from '@/lib/client/db';
 import { cropToBase64, loadImage, prepareUpload } from '@/lib/client/image';
 import type { Box, Product } from '@/lib/types';
+
+/** A saved room's current version, as a pickable card. */
+function RoomPick({ p, onPick }: { p: Project; onPick: (blob: Blob) => void }) {
+  const [blob, setBlob] = useState<Blob>();
+  const [thumb, setThumb] = useState<string>();
+  useEffect(() => {
+    let url: string | undefined;
+    getBlob(p.versions[p.current].id).then((b) => {
+      if (!b) return;
+      setBlob(b);
+      setThumb((url = URL.createObjectURL(b)));
+    });
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [p]);
+
+  return (
+    <button className="project-card room-pick" disabled={!blob} onClick={() => blob && onPick(blob)}>
+      {thumb ? <img className="project-thumb" src={thumb} alt="" /> : <div className="project-thumb" />}
+      <div className="project-meta">
+        <strong>{p.name}</strong>
+        <span className="tiny muted">{p.versions[p.current].label}</span>
+      </div>
+    </button>
+  );
+}
 
 export default function ShopPage() {
   const router = useRouter();
@@ -22,20 +49,31 @@ export default function ShopPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [results, setResults] = useState<{ products: Product[]; suggestedQuery?: string; key: number } | null>(null);
   const [error, setError] = useState<string>();
+  const [rooms, setRooms] = useState<Project[]>([]);
+  /** The saved room the photo came from, so "Design this room" reopens it instead of copying it. */
+  const [fromRoom, setFromRoom] = useState<string>();
+
+  useEffect(() => {
+    listProjects().then(setRooms).catch(() => setRooms([]));
+  }, []);
 
   useEffect(() => () => {
     if (photo) URL.revokeObjectURL(photo.url);
   }, [photo]);
 
+  async function openPhoto(blob: Blob, roomId?: string) {
+    const url = URL.createObjectURL(blob);
+    setPhoto({ blob, url, img: await loadImage(url) });
+    setFromRoom(roomId);
+    setResults(null);
+    setStatus('idle');
+    setPreview(undefined);
+  }
+
   async function onFile(f: File) {
     setPreparing(true);
     try {
-      const { blob } = await prepareUpload(f, 2400);
-      const url = URL.createObjectURL(blob);
-      setPhoto({ blob, url, img: await loadImage(url) });
-      setResults(null);
-      setStatus('idle');
-      setPreview(undefined);
+      await openPhoto((await prepareUpload(f, 2400)).blob);
     } catch {
       setError('That photo couldn’t be opened.');
     } finally {
@@ -62,6 +100,7 @@ export default function ShopPage() {
 
   async function designThis() {
     if (!photo) return;
+    if (fromRoom) return router.push(`/studio/${fromRoom}`);
     const p = await createProject('Shopped room', photo.blob, photo.img.naturalWidth, photo.img.naturalHeight);
     router.push(`/studio/${p.id}`);
   }
@@ -81,6 +120,22 @@ export default function ShopPage() {
               across stores.
             </p>
             <PhotoPicker onFile={onFile} busy={preparing} title="Upload a photo" hint="Then drag a box around what you love" />
+            {error && <p className="small" style={{ color: 'var(--error)', marginTop: 10 }}>{error}</p>}
+            {rooms.length > 0 && (
+              <section style={{ marginTop: 32 }}>
+                <h2 className="display" style={{ fontSize: 22, marginBottom: 4 }}>Or pick one of your rooms</h2>
+                <p className="tiny muted" style={{ marginBottom: 12 }}>Uses each room’s latest version</p>
+                <div className="projects room-picks">
+                  {rooms.map((r) => (
+                    <RoomPick
+                      key={r.id}
+                      p={r}
+                      onPick={(blob) => openPhoto(blob, r.id).catch(() => setError('That room’s photo couldn’t be opened.'))}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         ) : (
           <div className="shop-layout">
