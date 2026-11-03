@@ -1,4 +1,4 @@
-import type { InspoPhoto, Product, Story } from '../types';
+import type { InspoPhoto, Magazine, Product, Story } from '../types';
 
 const RETAILERS = ['Wayfair', 'West Elm', 'Target', 'Article', 'Crate & Barrel', 'IKEA', 'Amazon', 'CB2'];
 const ITEMS = [
@@ -60,7 +60,7 @@ function roomSvg(wall: string, floor: string, piece: string, label: string) {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }
 
-export function mockInspo(query: string, page: number): InspoPhoto[] {
+export function mockInspo(query: string, page: number, provider: InspoPhoto['provider']): InspoPhoto[] {
   return Array.from({ length: 12 }, (_, i) => {
     const n = page * 12 + i;
     const src = roomSvg(COLORS[n % COLORS.length], COLORS[(n + 3) % COLORS.length], COLORS[(n + 5) % COLORS.length], `${query} ${n + 1}`);
@@ -75,6 +75,7 @@ export function mockInspo(query: string, page: number): InspoPhoto[] {
       author: 'Demo photographer',
       authorUrl: 'https://unsplash.com',
       sourceUrl: 'https://unsplash.com',
+      provider,
     };
   });
 }
@@ -86,4 +87,8 @@ export function mockStories(): Story[] {
     image: roomSvg(COLORS[i], COLORS[(i + 2) % COLORS.length], COLORS[(i + 4) % COLORS.length], 'AD'),
     date: new Date(Date.now() - i * 86400000).toUTCString(),
   }));
+}
+
+export function mockMagazines(): Magazine[] {
+  return ['Architectural Digest', 'ELLE Decor', 'Dwell'].map((name) => ({ name, home: 'https://example.com', stories: mockStories() }));
 }

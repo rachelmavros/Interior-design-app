@@ -1,6 +1,21 @@
-import type { Story } from '../types';
+import type { Magazine, Story } from '../types';
 
-const FEED = 'https://www.architecturaldigest.com/feed/rss';
+/** Feeds tried in order per magazine; a magazine whose feeds all fail is left out. */
+const MAGAZINES: { name: string; home: string; feeds: string[] }[] = [
+  { name: 'Architectural Digest', home: 'https://www.architecturaldigest.com', feeds: ['https://www.architecturaldigest.com/feed/rss'] },
+  { name: 'ELLE Decor', home: 'https://www.elledecor.com', feeds: ['https://www.elledecor.com/rss/all.xml/'] },
+  {
+    name: 'Domino',
+    home: 'https://www.domino.com',
+    feeds: ['https://www.domino.com/rss', 'https://www.domino.com/feed', 'https://www.domino.com/feeds/all.rss'],
+  },
+  { name: 'Dwell', home: 'https://www.dwell.com', feeds: ['https://www.dwell.com/@dwell/rss'] },
+  {
+    name: 'Apartment Therapy',
+    home: 'https://www.apartmenttherapy.com',
+    feeds: ['https://www.apartmenttherapy.com/main.rss', 'https://www.apartmenttherapy.com/design.rss'],
+  },
+];
 
 function decode(s: string) {
   return s
@@ -27,23 +42,49 @@ function image(item: string) {
   return url ? decode(url) : undefined;
 }
 
-/** Latest Architectural Digest stories: headline, image and link back to AD. */
-export async function latestStories(limit = 12): Promise<Story[]> {
-  const res = await fetch(FEED, {
-    headers: { accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' },
+function linkOf(item: string) {
+  const rss = tag(item, 'link');
+  if (rss) return rss;
+  // Atom: <link rel="alternate" href="..."/>
+  const atom = item.match(/<link[^>]*rel="alternate"[^>]*href="([^"]+)"/i) || item.match(/<link[^>]*href="([^"]+)"/i);
+  return atom ? decode(atom[1]) : '';
+}
+
+async function readFeed(url: string, limit: number): Promise<Story[]> {
+  const res = await fetch(url, {
+    headers: { accept: 'application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.8' },
     next: { revalidate: 3600 },
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) throw new Error(`Feed error (${res.status})`);
   const xml = await res.text();
-  const items = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) || [];
-  return items
+  const items = xml.match(/<(item|entry)[\s>][\s\S]*?<\/(item|entry)>/gi) || [];
+  const stories = items
     .map((item) => ({
       title: tag(item, 'title'),
-      link: tag(item, 'link'),
+      link: linkOf(item),
       image: image(item),
-      date: tag(item, 'pubDate'),
+      date: tag(item, 'pubDate') || tag(item, 'published') || tag(item, 'updated'),
     }))
     .filter((s) => s.title && /^https:\/\//.test(s.link))
     .slice(0, limit);
+  if (!stories.length) throw new Error('Empty feed');
+  return stories;
+}
+
+/** Latest stories from each design magazine: headline, image and link back to the magazine. */
+export async function magazineRows(limit = 20): Promise<Magazine[]> {
+  const rows = await Promise.all(
+    MAGAZINES.map(async (m) => {
+      for (const feed of m.feeds) {
+        try {
+          return { name: m.name, home: m.home, stories: await readFeed(feed, limit) };
+        } catch (e) {
+          console.warn('editorial', feed, (e as Error).message);
+        }
+      }
+      return null;
+    }),
+  );
+  return rows.filter((r): r is Magazine => r !== null);
 }

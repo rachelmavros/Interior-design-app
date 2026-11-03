@@ -66,6 +66,14 @@ export interface InspoPhoto {
   sourceUrl: string;
   /** Unsplash's "this photo was used" endpoint. */
   useUrl?: string;
+  /** Where the photo comes from, for the credit line. */
+  provider: 'unsplash' | 'pinterest';
+}
+
+export interface Magazine {
+  name: string;
+  home: string;
+  stories: Story[];
 }
 
 export interface Story {

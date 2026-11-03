@@ -32,6 +32,7 @@ export async function searchPhotos(query: string, page: number) {
     authorUrl: `${r.user?.links?.html || 'https://unsplash.com'}?${UTM}`,
     sourceUrl: `${r.links?.html || 'https://unsplash.com'}?${UTM}`,
     useUrl: r.links?.download_location,
+    provider: 'unsplash' as const,
   }));
   return { photos, hasMore: page + 1 < (data.total_pages || 0) };
 }
