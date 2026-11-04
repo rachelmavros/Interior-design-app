@@ -1,9 +1,9 @@
 import { serpSearch } from './serp';
 import type { InspoPhoto } from '../types';
 
-/** Pinterest's mid-size rendition: sharp in the grid, far lighter than the original. */
-function gridSize(url: string) {
-  return url.replace(/(i\.pinimg\.com)\/originals\//, '$1/736x/');
+/** Pinterest's preview renditions; the app never shows a pin's original file. */
+export function pinSize(url: string, width: 474 | 736) {
+  return url.replace(/(i\.pinimg\.com)\/(originals|\d+x)\//, `$1/${width}x/`);
 }
 
 /**
@@ -18,8 +18,8 @@ export async function searchPins(query: string, page: number) {
     .filter((r) => typeof r.original === 'string' && /^https:\/\//.test(r.original) && typeof r.link === 'string')
     .map((r, i) => ({
       id: `pin-${page}-${i}-${r.original}`,
-      src: gridSize(r.original),
-      full: r.original,
+      src: pinSize(r.original, 474),
+      full: pinSize(r.original, 736),
       width: r.original_width || 4,
       height: r.original_height || 5,
       color: '#e8e2d9',
