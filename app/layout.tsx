@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Fraunces, Inter } from 'next/font/google';
 import { AccessGate } from '@/components/AccessGate';
+import { InstallHint } from '@/components/InstallHint';
 import './globals.css';
 
 const display = Fraunces({ subsets: ['latin'], variable: '--font-display', axes: ['opsz'] });
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <AccessGate />
+        <InstallHint />
       </body>
     </html>
   );
