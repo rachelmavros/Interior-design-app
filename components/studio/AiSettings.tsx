@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { EditsLeft } from '../AccountButton';
+import { useAccount } from '@/lib/client/account';
 import { IconChevronDown, IconCoin } from '@tabler/icons-react';
 import { setAiPrefs, useStudio } from '@/lib/client/studio';
 import { pickSendSize } from '@/lib/client/image';
@@ -25,6 +27,12 @@ export function AiSettings() {
   const aiMode = useStudio((s) => s.aiMode);
   const cost = useEditCost();
   const [open, setOpen] = useState(false);
+  const admin = useAccount((s) => s.admin);
+  // Best is for admins only; the server refuses it for everyone else too.
+  const qualities = QUALITY.filter((q) => q.id !== 'high' || admin);
+  useEffect(() => {
+    if (!admin && quality === 'high') setAiPrefs({ quality: 'medium' });
+  }, [admin, quality]);
   const recommended = MODE_DEFAULTS[aiMode];
   const available = IMAGE_MODELS.filter((m) => models.includes(m.id));
   const current = IMAGE_MODELS.find((m) => m.id === model);
@@ -68,7 +76,7 @@ export function AiSettings() {
           </div>
           <span className="label" style={{ marginTop: 12 }}>Quality</span>
           <div className="segmented">
-            {QUALITY.map((q) => (
+            {qualities.map((q) => (
               <button key={q.id} className={quality === q.id ? 'on' : ''} onClick={() => setAiPrefs({ quality: q.id })}>
                 {q.label}
                 {q.id === recommended.quality && ' ★'}
@@ -77,10 +85,11 @@ export function AiSettings() {
           </div>
           <p className="tiny muted" style={{ marginTop: 8 }}>
             ★ marks what tested best for this task. Clearing and adding each remember their own settings. Prices are estimates
-            from OpenAI’s list price; Premium + Best can take a few minutes.
+            from OpenAI’s list price.{admin && ' Premium + Best can take a few minutes.'}
           </p>
         </div>
       )}
+      <EditsLeft />
     </div>
   );
 }

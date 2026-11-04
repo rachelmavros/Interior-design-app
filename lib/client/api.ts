@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { identityHeaders } from './account';
 import type { AppConfig, EditParams, InspoPhoto, Magazine, Product, ProductSearchResponse } from '../types';
 
 const CODE_KEY = 'rts-access-code';
@@ -40,8 +41,10 @@ function requestCode(wrong: boolean): Promise<string | null> {
 
 async function call(input: string, init: RequestInit = {}): Promise<Response> {
   let wrong = false;
+  const who = await identityHeaders();
   for (;;) {
     const headers = new Headers(init.headers);
+    for (const [k, v] of Object.entries(who)) headers.set(k, v);
     const code = readCode();
     if (code) headers.set('x-access-code', code);
     const res = await fetch(input, { ...init, headers });

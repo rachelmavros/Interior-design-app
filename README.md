@@ -41,6 +41,28 @@ Image models redraw the whole picture even when given a mask, so walls and windo
 
 AI edits take 20–60s, so the edit function is allowed 300s. That needs Vercel's Fluid Compute, which is on by default for new projects.
 
+### Accounts, cloud saves and daily limits (Supabase)
+
+Optional, but needed for Sign in with Google, syncing rooms and saves across devices, daily AI limits, and admin-only Best quality. Without it the app works as before, with everything stored in the browser, no limits, and Best hidden for everyone.
+
+1. **Create a project** at [supabase.com](https://supabase.com) → New project (pick a region near you; save the database password somewhere safe).
+2. **Create the tables:** Supabase → **SQL Editor** → New query → paste all of [`supabase/schema.sql`](supabase/schema.sql) → **Run**. It's safe to run again after updates.
+3. **Make a Google sign-in client:** [Google Cloud Console](https://console.cloud.google.com) → create a project → **APIs & Services → OAuth consent screen**: External, app name, your support email, then publish it. Then **Credentials → Create credentials → OAuth client ID → Web application**, and under *Authorized redirect URIs* add `https://<your-project-ref>.supabase.co/auth/v1/callback` (Supabase shows this exact URL on its Google provider page). Copy the Client ID and Client secret.
+4. **Turn on Google in Supabase:** Authentication → **Sign In / Providers → Google** → enable, paste the Client ID and secret, save.
+5. **Tell Supabase your site's address:** Authentication → **URL Configuration** → *Site URL* = your app's URL (e.g. `https://your-app.vercel.app`), and under *Redirect URLs* add `https://your-app.vercel.app/**` (plus `https://*-yourteam.vercel.app/**` if you test on preview deployments).
+6. **Copy the keys:** Project Settings → **API keys** → the Project URL, the *publishable* (or legacy *anon*) key, and the *secret* (or legacy *service_role*) key.
+7. **Add them in Vercel** → Settings → Environment Variables, then redeploy:
+
+   | Variable | What it's for |
+   | --- | --- |
+   | `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The publishable/anon key (safe to be public) |
+   | `SUPABASE_SERVICE_ROLE_KEY` | The secret/service_role key — server only, never share it |
+   | `ADMIN_EMAILS` | Your Google email(s), comma-separated: Best quality and no daily limit |
+   | `FREE_EDITS_PER_DAY` / `ACCOUNT_EDITS_PER_DAY` / `NETWORK_EDITS_PER_DAY` | Optional; defaults 3 / 15 / 10 |
+
+Limits reset at midnight UTC. Signed-out visitors are counted per device, with a per-network backstop so clearing the browser doesn't reset it; failed generations aren't counted. Signing out saves everything to the account and clears that device.
+
 ### Costs to expect
 Each AI edit is one OpenAI image call. The studio shows an estimate on every generate button. Roughly, per edit of a landscape photo: Budget + Draft ≈ 1¢, Balanced + Standard ≈ 5¢, Premium + Best ≈ 33¢. Each Lens or store search is one SerpAPI search. Set `APP_ACCESS_CODE` before sharing the link widely.
 

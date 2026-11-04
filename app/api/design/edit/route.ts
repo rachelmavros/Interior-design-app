@@ -1,6 +1,8 @@
 import { guard, isMock, json } from '@/lib/server/guard';
 import { mockEditSvg } from '@/lib/server/mock';
 import { allowedModels, defaultModel } from '@/lib/server/models';
+import { currentAccount } from '@/lib/server/auth';
+import { chargeEdit } from '@/lib/server/quota';
 import { buildPrompt } from '@/lib/prompts';
 import type { EditMode, EditParams } from '@/lib/types';
 
@@ -64,6 +66,13 @@ export async function POST(req: Request) {
 
   const prompt = buildPrompt(params);
 
+  const account = await currentAccount(req);
+  if (quality === 'high' && !account?.admin) {
+    return json({ error: 'Best quality is limited to admins. Choose Draft or Standard.' }, 403);
+  }
+  const charge = await chargeEdit(req, account);
+  if (!charge.ok) return json({ error: charge.message, code: 'LIMIT_REACHED' }, 429);
+
   if (isMock()) {
     const [w, h] = size === 'auto' ? [1536, 1024] : size.split('x').map(Number);
     await new Promise((r) => setTimeout(r, 1200));
@@ -72,6 +81,31 @@ export async function POST(req: Request) {
     });
   }
 
+  const res = await openaiEdit({ model, prompt, quality, size, image, mask, reference, signal: req.signal });
+  // Failed generations don't count against the daily limit.
+  if (!res.ok) await charge.refund();
+  return res;
+}
+
+async function openaiEdit({
+  model,
+  prompt,
+  quality,
+  size,
+  image,
+  mask,
+  reference,
+  signal,
+}: {
+  signal: AbortSignal;
+  model: string;
+  prompt: string;
+  quality: string;
+  size: string;
+  image: Blob;
+  mask: Blob;
+  reference: FormDataEntryValue | null;
+}): Promise<Response> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return json({ error: 'OPENAI_API_KEY is not configured' }, 500);
 
@@ -100,7 +134,7 @@ export async function POST(req: Request) {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}` },
         body: fd,
-        signal: AbortSignal.any([req.signal, AbortSignal.timeout(280_000)]),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(280_000)]),
       });
     } catch (e) {
       console.error('openai fetch', e);

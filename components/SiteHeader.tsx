@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { IconArmchair2 } from '@tabler/icons-react';
+import { AccountButton } from './AccountButton';
 
 export function SiteHeader({ children }: { children?: React.ReactNode }) {
   return (
@@ -16,6 +17,7 @@ export function SiteHeader({ children }: { children?: React.ReactNode }) {
         <Link href="/inspo">Inspo</Link>
         <Link href="/shop">Shop a photo</Link>
       </nav>
+      <AccountButton />
     </header>
   );
 }

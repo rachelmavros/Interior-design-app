@@ -11,6 +11,7 @@ import { Disclosure } from '@/components/Disclosure';
 import { BoxSelect } from '@/components/BoxSelect';
 import { lensSearch } from '@/lib/client/api';
 import { createProject, getBlob, listProjects, type Project } from '@/lib/client/db';
+import { SYNC_EVENT } from '@/lib/client/sync';
 import { cropToBase64, loadImage, prepareUpload, proxied } from '@/lib/client/image';
 import type { Box, Product } from '@/lib/types';
 
@@ -54,7 +55,10 @@ export default function ShopPage() {
   const [fromRoom, setFromRoom] = useState<string>();
 
   useEffect(() => {
-    listProjects().then(setRooms).catch(() => setRooms([]));
+    const load = () => listProjects().then(setRooms).catch(() => setRooms([]));
+    load();
+    window.addEventListener(SYNC_EVENT, load);
+    return () => window.removeEventListener(SYNC_EVENT, load);
   }, []);
 
   // Arriving from Inspo with ?photo=<url>: open that photo right away.

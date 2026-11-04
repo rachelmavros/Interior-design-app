@@ -8,6 +8,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { PhotoPicker } from '@/components/PhotoPicker';
 import { Disclosure } from '@/components/Disclosure';
 import { createProject, deleteProject, getBlob, listProjects, type Project } from '@/lib/client/db';
+import { SYNC_EVENT } from '@/lib/client/sync';
 import { prepareUpload } from '@/lib/client/image';
 
 function ProjectCard({ p, onDelete }: { p: Project; onDelete: () => void }) {
@@ -52,7 +53,11 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    listProjects().then(setProjects).catch(() => setProjects([]));
+    const load = () => listProjects().then(setProjects).catch(() => setProjects([]));
+    load();
+    // Rooms arriving from (or cleared by) account sync.
+    window.addEventListener(SYNC_EVENT, load);
+    return () => window.removeEventListener(SYNC_EVENT, load);
   }, []);
 
   async function start(file: File) {

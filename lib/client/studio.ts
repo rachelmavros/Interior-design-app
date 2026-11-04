@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { designEdit, getConfig, lensSearch } from './api';
+import { accountsOn, refreshAccount, signIn, useAccount } from './account';
 import {
   blobToImage,
   anyChangeAlpha,
@@ -390,8 +391,10 @@ export function stopEdit() {
 }
 
 function editFailed(e: unknown) {
+  const msg = (e as Error).message;
   if ((e as Error).name === 'AbortError') toast('Stopped. Nothing was changed.');
-  else toast((e as Error).message, 'error');
+  else if (/Sign in with Google/.test(msg) && accountsOn) toast(msg, 'error', { label: 'Sign in', run: () => signIn() });
+  else toast(msg, 'error');
 }
 
 function editLabel(p: EditParams) {
@@ -404,7 +407,10 @@ function editLabel(p: EditParams) {
 }
 
 async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: EditParams, reference?: Blob) {
-  const { model, quality } = get().aiPrefs[params.mode === 'clear' ? 'clear' : 'add'];
+  const prefs = get().aiPrefs[params.mode === 'clear' ? 'clear' : 'add'];
+  const model = prefs.model;
+  // Best is admin-only; anyone else falls back to Standard.
+  const quality = prefs.quality === 'high' && !useAccount.getState().admin ? 'medium' : prefs.quality;
   const { W, H } = dims(source);
   const b = maskBounds(mask)!;
   const region = focusRegion(b, W, H);
@@ -462,6 +468,7 @@ export async function runEdit(params: EditParams, reference?: Blob) {
     editFailed(e);
   } finally {
     set({ busy: null });
+    refreshAccount();
   }
 }
 
@@ -778,6 +785,7 @@ export async function blendSticker(id: string) {
     editFailed(e);
   } finally {
     set({ busy: null });
+    refreshAccount();
   }
 }
 
