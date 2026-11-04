@@ -38,6 +38,18 @@ function Chips({ options, value, onChange, any }: { options: string[]; value: st
   );
 }
 
+/**
+ * Pins are other people's photos found through search, so they're shown the
+ * way a search engine shows them: preview size, credited and linked back,
+ * and never sent on to shopping.
+ */
+const shoppable = (p: InspoPhoto) => p.provider !== 'pinterest';
+
+function viewerSrc(p: InspoPhoto) {
+  // Older saves may hold a pin's original; cap it at the preview size.
+  return p.provider === 'pinterest' ? p.full.replace(/(i\.pinimg\.com)\/(originals|\d+x)\//, '$1/736x/') : p.full;
+}
+
 /** Full-screen view of one photo, with arrows (and arrow keys) to step through the rest. */
 function Lightbox({
   photos,
@@ -92,9 +104,9 @@ function Lightbox({
           setTouchX(null);
         }}
       >
-        {/* The grid-size image shows at once; the full-size one swaps in when it has loaded. */}
-        <img src={big ? p.full : p.src} alt={p.alt} />
-        {!big && p.full !== p.src && <img src={p.full} alt="" hidden onLoad={() => setBig(true)} />}
+        {/* The grid-size image shows at once; the larger one swaps in when it has loaded. */}
+        <img src={big ? viewerSrc(p) : p.src} alt={p.alt} />
+        {!big && viewerSrc(p) !== p.src && <img src={viewerSrc(p)} alt="" hidden onLoad={() => setBig(true)} />}
         {photos.length > 1 && (
           <>
             <button className="lightbox-nav prev" aria-label="Previous photo" onClick={() => step(-1)}>
@@ -107,14 +119,16 @@ function Lightbox({
         )}
       </div>
       <div className="lightbox-bar" onClick={(e) => e.stopPropagation()}>
-        <button className="btn btn-accent btn-sm" onClick={() => onShop(p)}>
-          <IconShoppingBag size={15} /> Shop this look
-        </button>
+        {shoppable(p) && (
+          <button className="btn btn-accent btn-sm" onClick={() => onShop(p)}>
+            <IconShoppingBag size={15} /> Shop this look
+          </button>
+        )}
         <button className={`btn btn-sm btn-outline lightbox-heart ${isSaved ? 'on' : ''}`} onClick={() => toggleInspo(p)} aria-pressed={isSaved}>
           {isSaved ? <IconHeartFilled size={15} /> : <IconHeart size={15} />} {isSaved ? 'Saved' : 'Save'}
         </button>
         <a className="btn btn-sm btn-ghost" href={p.sourceUrl} target="_blank" rel="noopener noreferrer">
-          <IconExternalLink size={15} /> {p.provider === 'unsplash' ? 'Unsplash' : 'Source'}
+          <IconExternalLink size={15} /> {p.provider === 'unsplash' ? 'Unsplash' : 'View original'}
         </a>
       </div>
     </div>
@@ -190,6 +204,7 @@ export default function InspoPage() {
   const [open, setOpen] = useState<number | null>(null);
 
   function shop(p: InspoPhoto) {
+    if (!shoppable(p)) return;
     reportInspoUse(p.useUrl);
     router.push(`/shop?photo=${encodeURIComponent(p.full)}`);
   }
@@ -298,6 +313,12 @@ export default function InspoPage() {
               Nothing saved yet. Tap the heart on any photo to keep it here.
             </div>
           )}
+          {!showSaved && source === 'pinterest' && (
+            <p className="tiny muted" style={{ margin: '4px 0 0' }}>
+              Pinterest results are search previews; each photo belongs to its owner and links to its source. Owners can{' '}
+              <a href="/privacy#copyright">ask us to remove a photo</a>.
+            </p>
+          )}
           <div className="inspo-grid">
             {shown.map((p, i) => (
               <figure key={p.id} className="inspo-card">
@@ -312,9 +333,11 @@ export default function InspoPage() {
                     (e.currentTarget.closest('.inspo-card') as HTMLElement | null)?.style.setProperty('display', 'none');
                   }}
                 />
-                <button className="btn btn-sm inspo-shop" onClick={() => shop(p)}>
-                  <IconShoppingBag size={14} /> Shop this look
-                </button>
+                {shoppable(p) && (
+                  <button className="btn btn-sm inspo-shop" onClick={() => shop(p)}>
+                    <IconShoppingBag size={14} /> Shop this look
+                  </button>
+                )}
                 <figcaption className="tiny muted">
                   <span>
                   {p.provider === 'unsplash' ? (

@@ -60,7 +60,8 @@ export default function ShopPage() {
   // Arriving from Inspo with ?photo=<url>: open that photo right away.
   useEffect(() => {
     const src = new URLSearchParams(window.location.search).get('photo');
-    if (!src) return;
+    // Only Inspo's licensed photos (Unsplash) open this way; demo mode uses inline images.
+    if (!src || !(src.startsWith('data:') || /^https:\/\/images\.unsplash\.com\//.test(src))) return;
     setPreparing(true);
     fetch(proxied(src))
       .then((r) => (r.ok ? r.blob() : Promise.reject()))
