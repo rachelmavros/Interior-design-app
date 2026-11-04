@@ -426,3 +426,9 @@ img { display: block; max-width: 100%; }
 .lightbox-bar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding-top: 12px; }
 .lightbox-bar .btn-outline, .lightbox-bar .btn-ghost { background: rgba(255,255,255,.95); }
 .lightbox-heart.on { color: var(--accent); }
+
+.install-hint { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 55; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.install-fab { width: 46px; height: 46px; border-radius: 999px; border: none; background: var(--accent); color: #fff; display: grid; place-items: center; box-shadow: var(--shadow); cursor: pointer; }
+.install-card { width: min(320px, calc(100vw - 32px)); background: var(--surface); border-radius: 14px; padding: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.18); font-size: 14px; }
+.install-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.4; }
+.install-steps svg { vertical-align: -2px; }
