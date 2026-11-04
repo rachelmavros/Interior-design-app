@@ -65,7 +65,17 @@ export const putBlob = (id: string, blob: Blob) => set(`blob:${id}`, blob, store
 export const getBlob = (id: string) => get<Blob>(`blob:${id}`, store);
 export const deleteBlob = (id: string) => del(`blob:${id}`, store);
 
-export const saveProject = (p: Project) => set(`project:${p.id}`, { ...p, updatedAt: Date.now() }, store);
+/** Lets cloud sync hear about local changes without this module depending on it. */
+export const dbHooks: { saved?: (p: Project) => void; deleted?: (p: Project) => void } = {};
+
+export async function saveProject(p: Project) {
+  const next = { ...p, updatedAt: Date.now() };
+  await set(`project:${p.id}`, next, store);
+  dbHooks.saved?.(next);
+}
+
+/** Stores a project exactly as given (used when it arrives from the cloud). */
+export const putProjectRaw = (p: Project) => set(`project:${p.id}`, p, store);
 export const loadProject = (id: string) => get<Project>(`project:${id}`, store);
 
 export async function listProjects(): Promise<Project[]> {
@@ -74,13 +84,21 @@ export async function listProjects(): Promise<Project[]> {
   return all.filter((p): p is Project => Boolean(p)).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-export async function deleteProject(p: Project) {
+/** Deletes a project and its photos; `localOnly` skips telling the cloud (used on sign-out). */
+export async function deleteProject(p: Project, localOnly = false) {
   await Promise.all([
     ...p.versions.map((v) => deleteBlob(v.id)),
     ...p.stickers.flatMap((s) => [deleteBlob(s.blobId), deleteBlob(s.origBlobId)]),
   ]);
   await del(`project:${p.id}`, store);
+  if (!localOnly) dbHooks.deleted?.(p);
 }
+
+/** Every photo a project needs. */
+export const projectBlobIds = (p: Project) => [
+  ...p.versions.map((v) => v.id),
+  ...p.stickers.flatMap((s) => [s.blobId, s.origBlobId]),
+];
 
 export async function createProject(name: string, blob: Blob, width: number, height: number) {
   const vid = uid();

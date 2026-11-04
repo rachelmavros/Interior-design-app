@@ -437,3 +437,19 @@ img { display: block; max-width: 100%; }
 .inspo-search .input { padding-left: 38px; }
 .inspo-search .icon-btn { position: absolute; right: 6px; }
 .inspo-search input::-webkit-search-cancel-button { display: none; }
+
+/* ── Account ──────────────────────────────────── */
+.account { position: relative; }
+.account-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-2); background: var(--surface); border-radius: 999px; padding: 4px 10px 4px 6px; font: inherit; font-size: 14px; color: var(--ink-2); cursor: pointer; margin-left: 6px; flex-shrink: 0; }
+.account .account-btn { padding: 2px; }
+.account-btn img { width: 28px; height: 28px; border-radius: 999px; display: block; }
+.account-menu { position: absolute; right: 0; top: calc(100% + 8px); width: 260px; background: var(--surface); border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.18); padding: 14px; z-index: 70; display: flex; flex-direction: column; gap: 6px; }
+.account-menu strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.admin-tag { align-self: flex-start; background: var(--accent-soft); color: var(--accent); border-radius: 999px; font-size: 11px; font-weight: 600; padding: 1px 8px; }
+.spin { animation: spin 1s linear infinite; }
+@media (max-width: 520px) {
+  .account-label { display: none; }
+  .account-btn { padding: 4px; margin-left: 2px; }
+  .nav a { padding: 7px 7px; }
+}

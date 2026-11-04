@@ -23,7 +23,14 @@ interface Library {
   folders: Folder[];
   /** Inspo photos hearted on the Inspo page, newest first. */
   inspo: InspoPhoto[];
+  /** Last local change, for cloud sync. */
+  updatedAt?: number;
 }
+
+export type LibraryData = Omit<Library, 'loaded'>;
+
+/** Lets cloud sync hear about changes without this module depending on it. */
+export const libraryHooks: { saved?: (data: LibraryData) => void } = {};
 
 /** Shopping history and saved boards, shared by every room on this device. */
 export const useLibrary = create<Library>(() => ({ loaded: false, recent: [], saved: [], folders: [], inspo: [] }));
@@ -42,9 +49,24 @@ export function loadLibrary() {
   return loading;
 }
 
+export function libraryData(): LibraryData {
+  const { recent, saved, folders, inspo, updatedAt } = get();
+  return { recent, saved, folders, inspo, updatedAt };
+}
+
 function save() {
-  const { recent, saved, folders, inspo } = get();
-  idbSet(KEY, { recent, saved, folders, inspo }, store).catch((e) => console.error('library save failed', e));
+  set({ updatedAt: Date.now() });
+  const data = libraryData();
+  idbSet(KEY, data, store).catch((e) => console.error('library save failed', e));
+  libraryHooks.saved?.(data);
+}
+
+/** Replaces the library with data from the cloud (or empties it on sign-out), without echoing it back. */
+export async function replaceLibrary(data: Partial<LibraryData>) {
+  await loadLibrary();
+  const next = { recent: [], saved: [], folders: [], inspo: [], ...data };
+  set(next);
+  await idbSet(KEY, libraryData(), store);
 }
 
 async function update(fn: (l: Library) => Partial<Library>) {

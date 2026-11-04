@@ -16,16 +16,31 @@ export default function Privacy() {
 
         <h2>The short version</h2>
         <p>
-          There are no accounts. Your room photos and designs are saved in your own browser, not on our servers. When you use
-          an AI edit or a visual search, the image needed for that request is sent to the service that performs it, and nothing
-          is kept by us afterward.
+          You can use the site without an account, and then your room photos and designs stay in your own browser. If you sign in
+          with Google, they’re also backed up to your account so you can use them on other devices. When you use an AI edit or a
+          visual search, the image needed for that request is sent to the service that performs it.
+        </p>
+
+        <h2>If you sign in</h2>
+        <p>
+          Signing in with Google gives us your name, email address and profile photo. Your rooms, room photos, edit history, saved
+          products, folders and saved inspiration are then stored in your account with Supabase, our database and storage
+          provider, so they sync between your devices. Only you can read them. Signing out removes them from that device; they stay
+          in your account. To delete your account and everything in it, email us{contact ? <> at <a href={`mailto:${contact}`}>{contact}</a></> : ''}.
+        </p>
+
+        <h2>Daily AI limits</h2>
+        <p>
+          To keep the free service running, we count AI edits per day: by a random ID stored in your browser and your network
+          address when you’re signed out, or by your account when you’re signed in. These counts contain nothing else and are
+          kept only by date.
         </p>
 
         <h2>What stays on your device</h2>
         <p>
           Projects, room photos, edit history, placed products and your AI model preference are stored in your browser’s local
-          storage (IndexedDB and localStorage). Clearing your browser data or deleting a project removes them. We can’t see or
-          recover them.
+          storage (IndexedDB and localStorage). Clearing your browser data or deleting a project removes them. Unless you’re signed
+          in, we can’t see or recover them.
         </p>
 
         <h2>What we send to other services, and why</h2>
