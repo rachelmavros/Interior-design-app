@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { IconChevronLeft, IconChevronRight, IconExternalLink, IconHeart, IconHeartFilled, IconShoppingBag, IconX } from '@tabler/icons-react';
+import { IconChevronLeft, IconChevronRight, IconExternalLink, IconHeart, IconHeartFilled, IconSearch, IconShoppingBag, IconX } from '@tabler/icons-react';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SetupNotice } from '@/components/SetupNotice';
 import { Disclosure } from '@/components/Disclosure';
@@ -20,9 +20,10 @@ const SOURCES: { id: InspoPhoto['provider']; label: string }[] = [
   { id: 'unsplash', label: 'Unsplash' },
 ];
 
-function query(room: string, style: string) {
-  if (!room && !style) return 'interior design';
-  return `${style} ${room || 'interior'} interior design`.trim().toLowerCase();
+function query(room: string, style: string, term: string) {
+  const words = `${style} ${term} ${room}`.replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!words) return 'interior design';
+  return /\b(interior|decor|design)\b/.test(words) ? words : `${words} interior design`;
 }
 
 function Chips({ options, value, onChange, any }: { options: string[]; value: string; onChange: (v: string) => void; any: string }) {
@@ -124,6 +125,9 @@ export default function InspoPage() {
   const router = useRouter();
   const [room, setRoom] = useState('Living room');
   const [style, setStyle] = useState('');
+  /** Free-text search, combined with any room and style chips picked after it. */
+  const [term, setTerm] = useState('');
+  const [draft, setDraft] = useState('');
   const [photos, setPhotos] = useState<InspoPhoto[]>([]);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -140,7 +144,7 @@ export default function InspoPage() {
     loadLibrary();
   }, []);
 
-  const q = query(room, style);
+  const q = query(room, style, term);
   useEffect(() => {
     let live = true;
     setLoading(true);
@@ -249,6 +253,41 @@ export default function InspoPage() {
           </div>
           {!showSaved && (
             <>
+              <form
+                className="inspo-search"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const t = draft.trim().slice(0, 80);
+                  setTerm(t);
+                  // A new search starts broad; chips then narrow it.
+                  if (t) pick({ room: '', style: '' });
+                  (document.activeElement as HTMLElement | null)?.blur();
+                }}
+              >
+                <IconSearch size={17} />
+                <input
+                  className="input"
+                  type="search"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Search, e.g. green tile backsplash"
+                  aria-label="Search inspiration"
+                  enterKeyHint="search"
+                />
+                {term && (
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setDraft('');
+                      setTerm('');
+                    }}
+                  >
+                    <IconX size={16} />
+                  </button>
+                )}
+              </form>
               <Chips options={ROOMS} value={room} onChange={(v) => pick({ room: v })} any="Any room" />
               <Chips options={STYLES} value={style} onChange={(v) => pick({ style: v })} any="Any style" />
             </>
