@@ -14,10 +14,12 @@ import {
   cropToBase64,
   ctx2d,
   dims,
+  editedRegions,
   loadImage,
   makeCanvas,
   maskBounds,
   maskCoverage,
+  matchDetail,
   padBox,
   proxied,
   removeBackground,
@@ -431,11 +433,13 @@ function editLabel(p: EditParams) {
   if (p.mode === 'clear') return short ? `Removed ${short}` : 'Cleared area';
   if (p.mode === 'add') return `Added ${short}`;
   if (p.mode === 'apply') return short ? `Inspo: ${short}` : 'Applied inspo';
+  if (p.mode === 'polish') return 'Final touches';
   return `Placed ${short}`;
 }
 
 async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: EditParams, reference?: Blob) {
-  const prefs = get().aiPrefs[params.mode === 'clear' ? 'clear' : 'add'];
+  // Final touches retouch existing pixels like a clear-out, so they share its settings.
+  const prefs = get().aiPrefs[params.mode === 'clear' || params.mode === 'polish' ? 'clear' : 'add'];
   const model = prefs.model;
   // Best is admin-only; anyone else falls back to Standard.
   const quality = prefs.quality === 'high' && !useAccount.getState().admin ? 'medium' : prefs.quality;
@@ -455,7 +459,7 @@ async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: 
   }
   const ai = { model, quality };
   const result = await blobToImage(resultBlob);
-  const patch = compositeEdit(src, result, m, params.mode === 'clear');
+  const patch = compositeEdit(src, result, m, params.mode === 'clear' || params.mode === 'polish');
   if (!region) return { blob: await toBlob(patch, 'image/jpeg', 0.93), ai };
 
   const out = makeCanvas(W, H);
@@ -492,6 +496,36 @@ export async function runEdit(params: EditParams, reference?: Blob) {
     } else {
       toast('Done. Use the history strip to compare or undo.', 'success');
     }
+  } catch (e) {
+    editFailed(e);
+  } finally {
+    set({ busy: null });
+    refreshAccount();
+  }
+}
+
+/**
+ * Final touches: one AI retouch pass over everything changed since the
+ * original photo (edges, seams, light), then sharpening those areas to match
+ * the original's detail. Saved as its own version.
+ */
+export async function finalTouches() {
+  const { base, project, busy: isBusy, urls } = get();
+  if (!base || !project || isBusy) return;
+  busy('Adding final touches', true);
+  reveal('.stage-wrap');
+  try {
+    const original = await loadImage(urls[project.versions[0].id]);
+    const edited = editedRegions(original, base);
+    if (!edited) {
+      toast('Nothing has been edited yet, so there’s nothing to touch up.');
+      return;
+    }
+    const { blob, ai } = await runMaskedEdit(base, edited.region, { mode: 'polish' });
+    const polished = await blobToImage(blob);
+    const sharp = matchDetail(polished, edited.region, edited.core);
+    await commitVersion(sharp ? await toBlob(sharp, 'image/jpeg', 0.93) : blob, editLabel({ mode: 'polish' }), undefined, ai);
+    toast('Final touches added. Compare with the history strip.', 'success');
   } catch (e) {
     editFailed(e);
   } finally {

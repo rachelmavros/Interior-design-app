@@ -677,3 +677,88 @@ export function proxied(src: string) {
   if (src.startsWith('data:') || src.startsWith('blob:')) return src;
   return `/api/image-proxy?url=${encodeURIComponent(src)}`;
 }
+
+// ── Final touches ─────────────────────────────────────────
+
+/**
+ * Alpha mask (full size) of everything that differs between the original
+ * photo and the current version, widened to take in the seams around each
+ * edit (`region`), plus just the changed pixels themselves (`core`). Compared
+ * at low resolution with a high threshold so re-saving the photo (JPEG
+ * noise) doesn't count as a change. Null when nothing changed.
+ */
+export function editedRegions(original: Drawable, current: Drawable): { region: HTMLCanvasElement; core: HTMLCanvasElement } | null {
+  const { W, H } = dims(current);
+  const s = Math.min(1, 512 / Math.max(W, H));
+  const w = Math.max(1, Math.round(W * s));
+  const h = Math.max(1, Math.round(H * s));
+  const o = dims(original);
+  const a = shrink(original, 0, 0, o.W, o.H, w, h);
+  const b = shrink(current, 0, 0, W, H, w, h);
+  let m: Float32Array = new Float32Array(w * h);
+  for (let i = 0; i < m.length; i++) {
+    const p = i * 4;
+    m[i] = Math.max(Math.abs(a[p] - b[p]), Math.abs(a[p + 1] - b[p + 1]), Math.abs(a[p + 2] - b[p + 2])) > 22 ? 1 : 0;
+  }
+  m = dilate(erode(m, w, h, 1), w, h, 1);
+  if (!m.some((v) => v)) return null;
+  const full = (a: Float32Array) => {
+    const out = makeCanvas(W, H);
+    const g = ctx2d(out);
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(alphaToCanvas(a, w, h), 0, 0, W, H);
+    return out;
+  };
+  return { region: full(dilate(m, w, h, Math.max(3, Math.round(Math.max(w, h) * 0.02)))), core: full(erode(m, w, h, 2)) };
+}
+
+/**
+ * AI-made areas are generated smaller than a phone photo and scaled up, so
+ * they look softer than the rest. Softness shows as weak fine detail
+ * compared with coarser detail, whatever the content, so that ratio is
+ * measured on textured pixels outside `region` and inside `core` (the
+ * changed pixels themselves), and the region (feathered) is sharpened until
+ * it matches. Returns null when it's already as crisp.
+ */
+export function matchDetail(img: Drawable, region: HTMLCanvasElement, core: HTMLCanvasElement): HTMLCanvasElement | null {
+  const { W, H } = dims(img);
+  const c = makeCanvas(W, H);
+  const g = ctx2d(c);
+  g.drawImage(img, 0, 0);
+  const data = g.getImageData(0, 0, W, H);
+  const d = data.data;
+  const long = Math.max(W, H);
+  const fineR = Math.max(1, Math.round(long * 0.0008));
+  const coarseR = Math.max(2, Math.round(long * 0.0015));
+  const alpha = blurAlpha(readAlpha(region), W, H, coarseR);
+  const inner = readAlpha(core);
+
+  const lum = new Float32Array(W * H);
+  for (let i = 0; i < lum.length; i++) lum[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  const fineBlur = blurAlpha(lum, W, H, fineR);
+  const coarseBlur = blurAlpha(lum, W, H, coarseR);
+
+  // Fine-to-coarse detail on textured pixels (flat walls and ceilings say nothing about sharpness).
+  let outF = 0, outC = 0, inF = 0, inC = 0, inN = 0, outN = 0;
+  for (let i = 0; i < lum.length; i += 2) {
+    const coarse = Math.abs(lum[i] - coarseBlur[i]);
+    if (coarse < 4) continue;
+    const fine = Math.abs(lum[i] - fineBlur[i]);
+    if (alpha[i] < 0.02) (outF += fine), (outC += coarse), outN++;
+    else if (inner[i] > 0.5) (inF += fine), (inC += coarse), inN++;
+  }
+  if (outN < 500 || inN < 500) return null;
+  // Sharpen in proportion to how much softer the edits are, within a range that never looks crunchy.
+  const deficit = (outF / outC) / (inF / inC) - 1;
+  if (deficit < 0.03) return null;
+  const amount = Math.min(1.2, Math.max(0.3, deficit * 3));
+
+  for (let i = 0; i < lum.length; i++) {
+    const a = alpha[i];
+    if (a <= 0) continue;
+    const boost = (lum[i] - fineBlur[i]) * amount * a;
+    for (let k = 0; k < 3; k++) d[i * 4 + k] = Math.max(0, Math.min(255, d[i * 4 + k] + boost));
+  }
+  g.putImageData(data, 0, 0);
+  return c;
+}

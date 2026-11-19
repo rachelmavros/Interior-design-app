@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { IconBrush, IconInfoCircle, IconPencil, IconSparkles, IconWand } from '@tabler/icons-react';
-import { runEdit, setAiMode, toast, useStudio } from '@/lib/client/studio';
+import { finalTouches, runEdit, setAiMode, toast, useStudio } from '@/lib/client/studio';
 import { AiSettings, useEditCost } from './AiSettings';
 import { ImportItem } from './ImportItem';
 import { InspoAttach, type Inspo } from './InspoAttach';
@@ -19,6 +19,8 @@ const MODES: { id: Mode; label: string }[] = [
 export function DesignPanel() {
   const coverage = useStudio((s) => s.maskCoverage);
   const cost = useEditCost();
+  const touchCost = useEditCost('clear');
+  const edited = useStudio((s) => (s.project?.current ?? 0) > 0);
   const busy = useStudio((s) => s.busy);
   const tool = useStudio((s) => s.tool);
   const [mode, setMode] = useState<Mode>('clear');
@@ -221,6 +223,24 @@ export function DesignPanel() {
             )}
           </button>
         </>
+      )}
+
+      {edited && (
+        <div className="card-soft finish-card">
+          <div>
+            <strong>
+              <IconSparkles size={16} /> Final touches
+            </strong>
+            <span className="tiny muted">
+              Done designing? One pass over everything you changed: crisper edges and seams, detail matched to your photo, and
+              light and shadows evened out. Saved as a new version you can undo.
+            </span>
+          </div>
+          <button className="btn btn-outline btn-block" onClick={finalTouches} disabled={!!busy}>
+            <IconSparkles size={16} /> Add final touches
+            {touchCost && <span className="btn-cost">{touchCost}</span>}
+          </button>
+        </div>
       )}
     </div>
   );
