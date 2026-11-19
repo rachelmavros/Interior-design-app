@@ -434,7 +434,10 @@ function seamCorrection(base: Drawable, result: Drawable, changed: Float32Array,
  */
 export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HTMLCanvasElement, sameSurface = true) {
   const { W, H } = dims(base);
-  const { grow, feather } = edgeRadii(W, H);
+  const radii = edgeRadii(W, H);
+  const grow = radii.grow;
+  // Something new (a rug, a brick wall) needs a crisp edge; a wide fade reads as fuzz.
+  const feather = sameSurface ? radii.feather : Math.max(2, Math.round(radii.feather / 2));
 
   const out = makeCanvas(W, H);
   const go = ctx2d(out);
@@ -465,7 +468,8 @@ export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HT
   const bx = Math.max(0, x0 - pad);
   const by = Math.max(0, y0 - pad);
   const box = { x: bx, y: by, w: Math.min(W, x1 + pad + 1) - bx, h: Math.min(H, y1 + pad + 1) - by };
-  const changed = sameSurface ? alpha : dilate(readAlpha(mask), W, H, grow + feather * 2);
+  // Skip everything the model was allowed to repaint (sent with the full margin).
+  const changed = sameSurface ? alpha : dilate(readAlpha(mask), W, H, grow + radii.feather * 2);
   const fix = seamCorrection(out, layer, changed, W, box);
 
   for (let y = 0; y < box.h; y++) {
@@ -751,13 +755,57 @@ export function matchDetail(img: Drawable, region: HTMLCanvasElement, core: HTML
   // Sharpen in proportion to how much softer the edits are, within a range that never looks crunchy.
   const deficit = (outF / outC) / (inF / inC) - 1;
   if (deficit < 0.03) return null;
-  const amount = Math.min(1.2, Math.max(0.3, deficit * 3));
+  const amount = Math.min(1.5, Math.max(0.4, deficit * 4));
 
   for (let i = 0; i < lum.length; i++) {
     const a = alpha[i];
     if (a <= 0) continue;
     const boost = (lum[i] - fineBlur[i]) * amount * a;
     for (let k = 0; k < 3; k++) d[i * 4 + k] = Math.max(0, Math.min(255, d[i * 4 + k] + boost));
+  }
+  g.putImageData(data, 0, 0);
+  return c;
+}
+
+/**
+ * Generated areas come out smoother than a real photo's sensor grain, which
+ * reads as blur. Measures the photo's fine noise outside `region` and inside
+ * `core`, and adds the missing amount (luminance only, feathered) to the
+ * region. Returns null when it already matches.
+ */
+export function matchGrain(img: Drawable, region: HTMLCanvasElement, core: HTMLCanvasElement): HTMLCanvasElement | null {
+  const { W, H } = dims(img);
+  const c = makeCanvas(W, H);
+  const g = ctx2d(c);
+  g.drawImage(img, 0, 0);
+  const data = g.getImageData(0, 0, W, H);
+  const d = data.data;
+  const lum = new Float32Array(W * H);
+  for (let i = 0; i < lum.length; i++) lum[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  const soft = blurAlpha(lum, W, H, 1);
+  const alpha = blurAlpha(readAlpha(region), W, H, Math.max(2, Math.round(Math.max(W, H) * 0.002)));
+  const inner = readAlpha(core);
+
+  // Noise is measured on smooth areas only, where texture doesn't count as grain.
+  let outV = 0, outN = 0, inV = 0, inN = 0;
+  for (let i = 0; i < lum.length; i += 2) {
+    const n = lum[i] - soft[i];
+    if (Math.abs(n) > 6) continue;
+    if (alpha[i] < 0.02) (outV += n * n), outN++;
+    else if (inner[i] > 0.5) (inV += n * n), inN++;
+  }
+  if (outN < 1000 || inN < 1000) return null;
+  const add = Math.sqrt(Math.max(0, outV / outN - inV / inN));
+  if (add < 0.4) return null;
+
+  let seed = 1234567;
+  const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  for (let i = 0; i < lum.length; i++) {
+    const a = alpha[i];
+    if (a <= 0) continue;
+    // Roughly normal noise from three uniforms.
+    const n = (rand() + rand() + rand() - 1.5) * 2 * add * a;
+    for (let k = 0; k < 3; k++) d[i * 4 + k] = Math.max(0, Math.min(255, d[i * 4 + k] + n));
   }
   g.putImageData(data, 0, 0);
   return c;

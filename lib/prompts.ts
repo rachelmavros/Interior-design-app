@@ -63,16 +63,6 @@ Carry out the request inside the masked region, taking the look from the inspira
 - Light it like the rest of the room: same light direction, color temperature and shadows, with the material's natural sheen.
 - Furniture, lamps, art, doors, windows, blinds, outlets and fixtures that stand in front of or on the surface keep their exact shape and position, with the new material visible around and behind them. Nothing else in the masked region changes.`;
 
-const POLISH = `${PRESERVE}
-
-Task: final retouch. The masked regions are areas that were already edited in this photo (furniture, decor, rugs, wall finishes added or removed) plus a margin around them. The design is final: keep every object, material, pattern, color, size and position exactly as it is now.
-Make the edits look like they were photographed in one shot:
-- Edges and seams: make every edge as crisp as the rest of the photo. Remove fuzzy, smeared, doubled or haloed outlines, color fringes, and soft bands where new pixels meet the original photo.
-- Detail: give surfaces the same sharpness, texture and fine grain as the untouched parts of the photo (rug weave, wood grain, brick and mortar, fabric).
-- Light: match the room's light direction, brightness and color temperature; add soft contact shadows where pieces meet the floor or wall and remove shadows that don't belong.
-- Geometry: straighten anything bent or warped and fix perspective that doesn't match the room.
-Do not add, remove, restyle or move anything.`;
-
 export function buildPrompt(p: EditParams): string {
   switch (p.mode) {
     case 'clear':
@@ -81,8 +71,6 @@ export function buildPrompt(p: EditParams): string {
       return ADD(p.text || 'a piece of furniture', p.style);
     case 'blend':
       return BLEND(p.text);
-    case 'polish':
-      return POLISH;
     case 'apply':
       return APPLY(p.text || 'apply this look');
   }
