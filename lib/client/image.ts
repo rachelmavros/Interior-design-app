@@ -340,14 +340,17 @@ export async function buildEditInputs(
   model: string,
   quality?: string,
   prefill = false,
+  tight = false,
 ) {
   const { W, H } = dims(base);
   const send = pickSendSize(W, H, model, quality);
   const { grow, feather } = edgeRadii(W, H);
 
   // The model is allowed to repaint slightly beyond the user's mask so the
-  // feathered seam we composite later lands on generated pixels.
-  const grown = alphaToCanvas(dilate(readAlpha(mask), W, H, grow + feather * 2), W, H);
+  // feathered seam we composite later lands on generated pixels. `tight`
+  // keeps that margin to what the paste actually uses, so a strip painted
+  // beside a window doesn't hand the model the window frame to redraw.
+  const grown = alphaToCanvas(dilate(readAlpha(mask), W, H, grow + feather * (tight ? 1 : 2)), W, H);
 
   const img = makeCanvas(send.w, send.h);
   const gi = ctx2d(img);

@@ -445,7 +445,7 @@ async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: 
   const src = region ? cropCanvas(source, region) : source;
   const m = region ? cropCanvas(mask, region) : mask;
 
-  const inputs = await buildEditInputs(src, m, model, quality, params.mode === 'clear');
+  const inputs = await buildEditInputs(src, m, model, quality, params.mode === 'clear', params.mode === 'apply');
   editAbort = new AbortController();
   let resultBlob: Blob;
   try {
