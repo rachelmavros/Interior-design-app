@@ -19,6 +19,7 @@ const MODES: { id: Mode; label: string }[] = [
 export function DesignPanel() {
   const coverage = useStudio((s) => s.maskCoverage);
   const cost = useEditCost();
+  const touchCost = useEditCost('clear');
   const edited = useStudio((s) => (s.project?.current ?? 0) > 0);
   const busy = useStudio((s) => s.busy);
   const tool = useStudio((s) => s.tool);
@@ -231,12 +232,13 @@ export function DesignPanel() {
               <IconSparkles size={16} /> Final touches
             </strong>
             <span className="tiny muted">
-              Done designing? Sharpens fuzzy edits and gives them your photo’s natural grain so they blend in. No AI, so nothing
-              in the room changes. Free, and saved as a new version you can undo.
+              Done designing? AI cleans up fuzzy borders around everything you added, working only on thin strips along each edge.
+              Any spot it changes too much is put back as it was. Saved as a new version you can undo.
             </span>
           </div>
           <button className="btn btn-outline btn-block" onClick={finalTouches} disabled={!!busy}>
             <IconSparkles size={16} /> Add final touches
+            {touchCost && <span className="btn-cost">{touchCost}</span>}
           </button>
         </div>
       )}

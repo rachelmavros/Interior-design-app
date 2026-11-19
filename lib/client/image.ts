@@ -687,11 +687,15 @@ export function proxied(src: string) {
 /**
  * Alpha mask (full size) of everything that differs between the original
  * photo and the current version, widened to take in the seams around each
- * edit (`region`), plus just the changed pixels themselves (`core`). Compared
- * at low resolution with a high threshold so re-saving the photo (JPEG
- * noise) doesn't count as a change. Null when nothing changed.
+ * edit (`region`), just the changed pixels themselves (`core`), and a thin
+ * strip along every edit's border (`seams`), where blend fuzz lives.
+ * Compared at low resolution with a high threshold so re-saving the photo
+ * (JPEG noise) doesn't count as a change. Null when nothing changed.
  */
-export function editedRegions(original: Drawable, current: Drawable): { region: HTMLCanvasElement; core: HTMLCanvasElement } | null {
+export function editedRegions(
+  original: Drawable,
+  current: Drawable,
+): { region: HTMLCanvasElement; core: HTMLCanvasElement; seams: HTMLCanvasElement } | null {
   const { W, H } = dims(current);
   const s = Math.min(1, 512 / Math.max(W, H));
   const w = Math.max(1, Math.round(W * s));
@@ -706,6 +710,11 @@ export function editedRegions(original: Drawable, current: Drawable): { region: 
   }
   m = dilate(erode(m, w, h, 1), w, h, 1);
   if (!m.some((v) => v)) return null;
+  // Parts of a new piece can happen to match the old photo (a dark rug line
+  // over a dark floor). Close small gaps and fill enclosed holes so only each
+  // edit's outer border counts as a seam.
+  const close = Math.max(2, Math.round(Math.max(w, h) * 0.01));
+  m = fillHoles(erode(dilate(m, w, h, close), w, h, close), w, h);
   const full = (a: Float32Array) => {
     const out = makeCanvas(W, H);
     const g = ctx2d(out);
@@ -713,7 +722,98 @@ export function editedRegions(original: Drawable, current: Drawable): { region: 
     g.drawImage(alphaToCanvas(a, w, h), 0, 0, W, H);
     return out;
   };
-  return { region: full(dilate(m, w, h, Math.max(3, Math.round(Math.max(w, h) * 0.02)))), core: full(erode(m, w, h, 2)) };
+  const rb = Math.max(2, Math.round(Math.max(w, h) * 0.012));
+  const outer = dilate(m, w, h, rb);
+  const inner = erode(m, w, h, rb);
+  const band = outer.map((v, i) => (v && !inner[i] ? 1 : 0));
+  return {
+    region: full(dilate(m, w, h, Math.max(3, Math.round(Math.max(w, h) * 0.02)))),
+    core: full(erode(m, w, h, 2)),
+    seams: full(band),
+  };
+}
+
+/** Sets every empty area that doesn't reach the image border to filled. */
+function fillHoles(a: Float32Array, w: number, h: number) {
+  const outside = new Uint8Array(a.length);
+  const stack: number[] = [];
+  const push = (i: number) => {
+    if (!a[i] && !outside[i]) {
+      outside[i] = 1;
+      stack.push(i);
+    }
+  };
+  for (let x = 0; x < w; x++) push(x), push((h - 1) * w + x);
+  for (let y = 0; y < h; y++) push(y * w), push(y * w + w - 1);
+  while (stack.length) {
+    const i = stack.pop()!;
+    const x = i % w;
+    if (x > 0) push(i - 1);
+    if (x < w - 1) push(i + 1);
+    if (i >= w) push(i - w);
+    if (i < a.length - w) push(i + w);
+  }
+  return a.map((v, i) => (v || !outside[i] ? 1 : 0));
+}
+
+/**
+ * Safety net for AI touch-ups: splits the area around `seams` into small
+ * tiles and puts back the original wherever the AI changed a tile by more
+ * than an edge clean-up could (something removed, added or redrawn).
+ * Returns the merged image and how many tiles were put back.
+ */
+export function limitChanges(before: Drawable, after: Drawable, seams: HTMLCanvasElement, maxMean = 12) {
+  const { W, H } = dims(before);
+  const s = Math.min(1, 512 / Math.max(W, H));
+  const w = Math.max(1, Math.round(W * s));
+  const h = Math.max(1, Math.round(H * s));
+  const a = shrink(before, 0, 0, W, H, w, h);
+  const b = shrink(after, 0, 0, dims(after).W, dims(after).H, w, h);
+  const z = shrink(seams, 0, 0, W, H, w, h);
+  // The pasted area reaches a little past the strips.
+  let zone: Float32Array = new Float32Array(w * h);
+  for (let i = 0; i < zone.length; i++) zone[i] = z[i * 4 + 3] > 10 ? 1 : 0;
+  zone = dilate(zone, w, h, Math.max(2, Math.round(Math.max(w, h) * 0.018)));
+
+  const tile = Math.max(8, Math.round(Math.max(w, h) / 16));
+  const tw = Math.ceil(w / tile);
+  const th = Math.ceil(h / tile);
+  const sum = new Float32Array(tw * th);
+  const cnt = new Float32Array(tw * th);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (!zone[i]) continue;
+      const p = i * 4;
+      const t = Math.floor(y / tile) * tw + Math.floor(x / tile);
+      sum[t] += Math.max(Math.abs(a[p] - b[p]), Math.abs(a[p + 1] - b[p + 1]), Math.abs(a[p + 2] - b[p + 2]));
+      cnt[t]++;
+    }
+  }
+  let revert: Float32Array = new Float32Array(w * h);
+  let reverted = 0;
+  for (let t = 0; t < sum.length; t++) {
+    if (!cnt[t] || sum[t] / cnt[t] <= maxMean) continue;
+    reverted++;
+    const tx = (t % tw) * tile;
+    const ty = Math.floor(t / tw) * tile;
+    for (let y = ty; y < Math.min(h, ty + tile); y++) for (let x = tx; x < Math.min(w, tx + tile); x++) revert[y * w + x] = 1;
+  }
+
+  const out = makeCanvas(W, H);
+  const g = ctx2d(out);
+  g.drawImage(after, 0, 0, W, H);
+  if (reverted) {
+    revert = blurAlpha(dilate(revert, w, h, 1), w, h, 2);
+    const keep = makeCanvas(W, H);
+    const gk = ctx2d(keep);
+    gk.imageSmoothingQuality = 'high';
+    gk.drawImage(alphaToCanvas(revert, w, h), 0, 0, W, H);
+    gk.globalCompositeOperation = 'source-in';
+    gk.drawImage(before, 0, 0, W, H);
+    g.drawImage(keep, 0, 0);
+  }
+  return { canvas: out, reverted };
 }
 
 /**

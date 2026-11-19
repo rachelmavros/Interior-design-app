@@ -63,6 +63,14 @@ Carry out the request inside the masked region, taking the look from the inspira
 - Light it like the rest of the room: same light direction, color temperature and shadows, with the material's natural sheen.
 - Furniture, lamps, art, doors, windows, blinds, outlets and fixtures that stand in front of or on the surface keep their exact shape and position, with the new material visible around and behind them. Nothing else in the masked region changes.`;
 
+const TOUCHUP = `${PRESERVE}
+
+Task: edge clean-up only. The masked strips run along the borders of things already placed in this finished photo (a rug, a wall finish, a piece of furniture). This is not a redesign.
+- Make every border inside the strips as crisp and clean as the rest of the photo: remove blur, smearing, halos, ghosting, doubled outlines, color fringes and soft fade bands.
+- On each side of a border, continue exactly the material already there (the rug's own pattern up to its edge, the floor or carpet beside it, the brick up to the edge of the wall) and finish it with a clean, sharp boundary in the same place.
+- Keep every object and material exactly as it is: same outline position, pattern, color and size. Never remove, add, move, resize or restyle anything, and never swap one material for another.
+- Match the photo's sharpness, grain and lighting.`;
+
 export function buildPrompt(p: EditParams): string {
   switch (p.mode) {
     case 'clear':
@@ -71,6 +79,8 @@ export function buildPrompt(p: EditParams): string {
       return ADD(p.text || 'a piece of furniture', p.style);
     case 'blend':
       return BLEND(p.text);
+    case 'touchup':
+      return TOUCHUP;
     case 'apply':
       return APPLY(p.text || 'apply this look');
   }
