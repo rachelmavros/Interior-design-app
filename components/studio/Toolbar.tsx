@@ -13,16 +13,14 @@ import {
   IconSquareDashed,
   IconShoppingBagSearch,
   IconArrowsExchange,
-  IconRotate2,
 } from '@tabler/icons-react';
 import {
   canRedo,
   canUndo,
   clearMask,
   invertMask,
-  redo,
-  undo,
-  undoMask,
+  redoAny,
+  undoAny,
   useStudio,
   type Tool,
 } from '@/lib/client/studio';
@@ -43,6 +41,7 @@ export function Toolbar() {
   const urls = useStudio((s) => s.urls);
   const busy = useStudio((s) => s.busy);
   const hasMaskHistory = useStudio((s) => s.maskHistory.length > 0);
+  const hasMaskFuture = useStudio((s) => s.maskFuture.length > 0);
   const coverage = useStudio((s) => s.maskCoverage);
 
   const setTool = (t: Tool) => useStudio.setState({ tool: t, compare: false });
@@ -75,9 +74,6 @@ export function Toolbar() {
         </label>
       )}
       <div className="sep" />
-      <button className="icon-btn" onClick={undoMask} disabled={!hasMaskHistory} title="Undo paint" aria-label="Undo paint">
-        <IconRotate2 size={19} style={{ transform: 'scaleX(-1)' }} />
-      </button>
       <button className="icon-btn" onClick={invertMask} title="Invert painted area" aria-label="Invert painted area">
         <IconArrowsExchange size={19} />
       </button>
@@ -103,15 +99,21 @@ export function Toolbar() {
       >
         <IconColumns2 size={19} />
       </button>
-      <button className="icon-btn" onClick={undo} disabled={!canUndo(project) || !!busy} title="Undo edit" aria-label="Undo edit">
+      <button
+        className="icon-btn"
+        onClick={undoAny}
+        disabled={!!busy || (!hasMaskHistory && !canUndo(project))}
+        title={hasMaskHistory ? 'Undo brush stroke' : 'Undo edit'}
+        aria-label={hasMaskHistory ? 'Undo brush stroke' : 'Undo edit'}
+      >
         <IconArrowBackUp size={19} />
       </button>
       <button
         className="icon-btn"
-        onClick={redo}
-        disabled={!canRedo(project) || !!busy}
-        title="Redo edit"
-        aria-label="Redo edit"
+        onClick={redoAny}
+        disabled={!!busy || (!hasMaskFuture && !canRedo(project))}
+        title={hasMaskFuture ? 'Redo brush stroke' : 'Redo edit'}
+        aria-label={hasMaskFuture ? 'Redo brush stroke' : 'Redo edit'}
       >
         <IconArrowForwardUp size={19} />
       </button>

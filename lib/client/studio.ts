@@ -72,6 +72,8 @@ interface State {
   maskRev: number;
   maskCoverage: number;
   maskHistory: ImageData[];
+  /** Strokes taken back with undo, for redo. */
+  maskFuture: ImageData[];
   tool: Tool;
   brush: number;
   tab: Tab;
@@ -98,6 +100,7 @@ const initial: State = {
   maskRev: 0,
   maskCoverage: 0,
   maskHistory: [],
+  maskFuture: [],
   tool: 'brush',
   brush: 36,
   tab: 'design',
@@ -336,7 +339,8 @@ export function snapshotMask() {
   const m = get().mask;
   if (!m) return;
   const snap = ctx2d(m).getImageData(0, 0, m.width, m.height);
-  set({ maskHistory: [...get().maskHistory.slice(-14), snap] });
+  // A new stroke drops anything that was undone.
+  set({ maskHistory: [...get().maskHistory.slice(-14), snap], maskFuture: [] });
 }
 
 export function maskChanged() {
@@ -345,12 +349,36 @@ export function maskChanged() {
 }
 
 export function undoMask() {
-  const { mask, maskHistory } = get();
+  const { mask, maskHistory, maskFuture } = get();
   const last = maskHistory[maskHistory.length - 1];
   if (!mask || !last) return;
-  ctx2d(mask).putImageData(last, 0, 0);
-  set({ maskHistory: maskHistory.slice(0, -1) });
+  const g = ctx2d(mask);
+  const now = g.getImageData(0, 0, mask.width, mask.height);
+  g.putImageData(last, 0, 0);
+  set({ maskHistory: maskHistory.slice(0, -1), maskFuture: [...maskFuture, now] });
   maskChanged();
+}
+
+export function redoMask() {
+  const { mask, maskHistory, maskFuture } = get();
+  const next = maskFuture[maskFuture.length - 1];
+  if (!mask || !next) return;
+  const g = ctx2d(mask);
+  const now = g.getImageData(0, 0, mask.width, mask.height);
+  g.putImageData(next, 0, 0);
+  set({ maskHistory: [...maskHistory, now], maskFuture: maskFuture.slice(0, -1) });
+  maskChanged();
+}
+
+/** Undo button: takes back the last brush stroke first, then whole edits. */
+export function undoAny() {
+  if (get().maskHistory.length) undoMask();
+  else undo();
+}
+
+export function redoAny() {
+  if (get().maskFuture.length) redoMask();
+  else redo();
 }
 
 export function clearMask() {
@@ -427,7 +455,7 @@ async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: 
   }
   const ai = { model, quality };
   const result = await blobToImage(resultBlob);
-  const patch = compositeEdit(src, result, m);
+  const patch = compositeEdit(src, result, m, params.mode === 'clear');
   if (!region) return { blob: await toBlob(patch, 'image/jpeg', 0.93), ai };
 
   const out = makeCanvas(W, H);
@@ -458,7 +486,7 @@ export async function runEdit(params: EditParams, reference?: Blob) {
       ai,
     );
     clearMask();
-    set({ maskHistory: [] });
+    set({ maskHistory: [], maskFuture: [] });
     if (item) {
       toast('Done! Drag it with the ✋ Move tool, or find it in stores.', 'success', { label: 'Shop it', run: () => shopItem(item) });
     } else {
