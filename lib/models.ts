@@ -34,6 +34,7 @@ export const QUALITY_LABELS: Record<Quality, string> = { low: 'Draft', medium: '
 
 /** Short "Balanced · Standard" tag for an AI edit. */
 export function aiTag(model: string, quality: Quality) {
+  if (model.startsWith('gemini')) return 'Gemini';
   return `${IMAGE_MODELS.find((m) => m.id === model)?.label ?? model} · ${QUALITY_LABELS[quality]}`;
 }
 

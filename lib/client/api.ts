@@ -67,7 +67,7 @@ let configPromise: Promise<AppConfig> | null = null;
 export function getConfig(): Promise<AppConfig> {
   configPromise ??= fetch('/api/config')
     .then((r) => r.json())
-    .catch(() => ({ model: 'gpt-image-1-mini', models: ['gpt-image-1-mini'], amazon: false, mock: false, accessRequired: false, missing: [] }));
+    .catch(() => ({ model: 'gpt-image-1-mini', models: ['gpt-image-1-mini'], amazon: false, mock: false, accessRequired: false, missing: [], touchup: 'openai' }));
   return configPromise;
 }
 
@@ -135,4 +135,16 @@ export async function magazines(): Promise<Magazine[]> {
 export function reportInspoUse(url?: string) {
   if (!url) return;
   call('/api/inspo/use', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }) }).catch(() => {});
+}
+
+/** Sends the whole photo to Gemini for Final touches; returns its cleaned-up copy. */
+export async function geminiTouchup(image: Blob, signal?: AbortSignal): Promise<Blob> {
+  const fd = new FormData();
+  fd.append('image', image, 'room.jpg');
+  const res = await call('/api/design/touchup', { method: 'POST', body: fd, signal });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Touch-up failed (${res.status})`);
+  }
+  return res.blob();
 }

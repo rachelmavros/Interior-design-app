@@ -29,6 +29,8 @@ Image models redraw the whole picture even when given a mask, so walls and windo
    | `IMGBB_KEY` | yes | Temporary hosting of your crop so Lens can see it (auto-deletes after 10 min) |
    | `OPENAI_API_KEY` | yes | AI edits. Your OpenAI org may need [verification](https://platform.openai.com/settings/organization/general) to use image models |
    | `UNSPLASH_ACCESS_KEY` | yes | Inspo photos. Free: [unsplash.com/developers](https://unsplash.com/developers) → New Application → Access Key |
+   | `GEMINI_API_KEY` | no | Final touches with Gemini, which cleans up fuzzy edges without changing the room (about 4¢ each). Get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey); billing must be on for image output. Without it, Final touches uses OpenAI on the edges only |
+   | `GEMINI_IMAGE_MODEL` | no | A different Gemini image model id (default `gemini-2.5-flash-image`) |
    | `OPENAI_IMAGE_MODEL` | no | Starting model: `gpt-image-1-mini` (default, cheapest), `gpt-image-1.5`, or `gpt-image-2`. Visitors can switch in the studio |
    | `OPENAI_ALLOWED_MODELS` | no | Comma-separated list to restrict which models visitors may pick (e.g. hide Premium) |
    | `CONTACT_EMAIL` | no | Shown on the privacy page |

@@ -432,7 +432,7 @@ function seamCorrection(base: Drawable, result: Drawable, changed: Float32Array,
  * one, so only the model's overall color drift, measured beyond everything
  * it was allowed to repaint, is corrected.
  */
-export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HTMLCanvasElement, sameSurface = true) {
+export function compositeEdit(base: Drawable, result: Drawable, mask: HTMLCanvasElement, sameSurface = true) {
   const { W, H } = dims(base);
   const radii = edgeRadii(W, H);
   const grow = radii.grow;
@@ -909,4 +909,87 @@ export function matchGrain(img: Drawable, region: HTMLCanvasElement, core: HTMLC
   }
   g.putImageData(data, 0, 0);
   return c;
+}
+
+/**
+ * Lines an AI image up with the photo it was made from. Instruction-based
+ * editors return fixed sizes, so the photo may have been stretched, cropped
+ * or padded to fit. Each placement (which part of the result lands on which
+ * part of the photo, plus small nudges) is scored against the photo outside
+ * `skip` (the edited areas); the best one is drawn over the photo, which
+ * shows through anywhere the result doesn't reach.
+ */
+export function alignResult(base: Drawable, result: Drawable, skip?: HTMLCanvasElement): HTMLCanvasElement {
+  const { W, H } = dims(base);
+  const r = dims(result);
+  const gw = 192;
+  const gh = Math.max(1, Math.round((gw * H) / W));
+  const ref = shrink(base, 0, 0, W, H, gw, gh);
+  const mask = skip ? shrink(skip, 0, 0, W, H, gw, gh) : null;
+  const sx = gw / W;
+  const sy = gh / H;
+
+  type Place = { src: Box; dst: Box };
+  const rb = W / H;
+  const ra = r.W / r.H;
+  const whole = { x: 0, y: 0, w: r.W, h: r.H };
+  const candidates: Place[] = [{ src: whole, dst: { x: 0, y: 0, w: W, h: H } }];
+  if (ra < rb) {
+    // Narrower: either the photo's sides were cut off, or it was letterboxed top and bottom.
+    candidates.push({ src: whole, dst: { x: (W - H * ra) / 2, y: 0, w: H * ra, h: H } });
+    candidates.push({ src: { x: 0, y: (r.H - r.W / rb) / 2, w: r.W, h: r.W / rb }, dst: { x: 0, y: 0, w: W, h: H } });
+  } else if (ra > rb) {
+    candidates.push({ src: whole, dst: { x: 0, y: (H - W / ra) / 2, w: W, h: W / ra } });
+    candidates.push({ src: { x: (r.W - r.H * rb) / 2, y: 0, w: r.H * rb, h: r.H }, dst: { x: 0, y: 0, w: W, h: H } });
+  }
+
+  const score = ({ src, dst }: Place) => {
+    const c = makeCanvas(gw, gh);
+    const g = ctx2d(c);
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(result, src.x, src.y, src.w, src.h, dst.x * sx, dst.y * sy, dst.w * sx, dst.h * sy);
+    const d = g.getImageData(0, 0, gw, gh).data;
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < gw * gh; i++) {
+      const p = i * 4;
+      if (d[p + 3] < 250 || (mask && mask[p + 3] > 10)) continue;
+      sum += Math.abs(d[p] - ref[p]) + Math.abs(d[p + 1] - ref[p + 1]) + Math.abs(d[p + 2] - ref[p + 2]);
+      n++;
+    }
+    // Placements that cover too little of the photo can't be trusted.
+    return n > gw * gh * 0.5 ? sum / n : Infinity;
+  };
+
+  let best = candidates[0];
+  let bestScore = score(best);
+  for (const c of candidates.slice(1)) {
+    const v = score(c);
+    if (v < bestScore) (best = c), (bestScore = v);
+  }
+  // Nudge where it lands, and its size, by small steps to absorb offsets.
+  for (const step of [0.01, 0.003]) {
+    let improved = true;
+    for (let guard = 0; improved && guard < 40; guard++) {
+      improved = false;
+      for (const [dx, dy, dw, dh] of [[1, 0, 0, 0], [-1, 0, 0, 0], [0, 1, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0], [0, 0, -1, 0], [0, 0, 0, 1], [0, 0, 0, -1]]) {
+        const d = best.dst;
+        const c = { src: best.src, dst: { x: d.x + dx * step * W, y: d.y + dy * step * H, w: d.w + dw * step * W, h: d.h + dh * step * H } };
+        const v = score(c);
+        if (v < bestScore - 0.05) {
+          best = c;
+          bestScore = v;
+          improved = true;
+        }
+      }
+    }
+  }
+
+  const out = makeCanvas(W, H);
+  const g = ctx2d(out);
+  g.drawImage(base, 0, 0);
+  g.imageSmoothingQuality = 'high';
+  const { src, dst } = best;
+  g.drawImage(result, src.x, src.y, src.w, src.h, dst.x, dst.y, dst.w, dst.h);
+  return out;
 }

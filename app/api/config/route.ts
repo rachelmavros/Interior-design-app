@@ -1,5 +1,6 @@
 import { isMock } from '@/lib/server/guard';
 import { allowedModels, defaultModel } from '@/lib/server/models';
+import { geminiEnabled } from '@/lib/server/gemini';
 import type { AppConfig } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,7 @@ export function GET() {
     mock: isMock(),
     accessRequired: Boolean(process.env.APP_ACCESS_CODE),
     missing: isMock() ? [] : missing,
+    touchup: geminiEnabled() || (isMock() && process.env.MOCK_TOUCHUP !== 'openai') ? 'gemini' : 'openai',
   };
   return Response.json(body);
 }
