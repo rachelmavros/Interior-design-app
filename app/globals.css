@@ -453,3 +453,8 @@ img { display: block; max-width: 100%; }
   .account-btn { padding: 4px; margin-left: 2px; }
   .nav a { padding: 7px 7px; }
 }
+
+.finish-card { display: flex; flex-direction: column; gap: 10px; }
+.finish-card strong { display: flex; align-items: center; gap: 6px; font-size: 14px; margin-bottom: 2px; color: var(--ink); }
+.finish-card strong svg { color: var(--accent); }
+.finish-card .tiny { display: block; }

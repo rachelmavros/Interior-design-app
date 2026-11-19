@@ -25,7 +25,7 @@ export interface ProductSearchResponse {
   error?: string;
 }
 
-export type EditMode = 'clear' | 'add' | 'blend' | 'apply';
+export type EditMode = 'clear' | 'add' | 'blend' | 'apply' | 'polish';
 
 export interface EditParams {
   mode: EditMode;

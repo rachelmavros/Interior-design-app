@@ -8,7 +8,7 @@ import type { EditMode, EditParams } from '@/lib/types';
 
 export const maxDuration = 300;
 
-const MODES: EditMode[] = ['clear', 'add', 'blend', 'apply'];
+const MODES: EditMode[] = ['clear', 'add', 'blend', 'apply', 'polish'];
 const QUALITIES = ['low', 'medium', 'high'];
 const MAX_BYTES = 8 * 1024 * 1024;
 
