@@ -232,7 +232,8 @@ export function DesignPanel() {
         </>
       )}
 
-      {edited && (
+      {/* Only Gemini makes a visible clean-up; without its key the card stays hidden. */}
+      {edited && gemini && (
         <div className="card-soft finish-card">
           <div>
             <strong>
