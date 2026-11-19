@@ -15,6 +15,7 @@ import {
   ctx2d,
   dims,
   editedRegions,
+  limitChanges,
   loadImage,
   makeCanvas,
   maskBounds,
@@ -438,7 +439,8 @@ function editLabel(p: EditParams) {
 }
 
 async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: EditParams, reference?: Blob) {
-  const prefs = get().aiPrefs[params.mode === 'clear' ? 'clear' : 'add'];
+  // Touch-ups repair existing pixels like a clear-out, so they share its settings.
+  const prefs = get().aiPrefs[params.mode === 'clear' || params.mode === 'touchup' ? 'clear' : 'add'];
   const model = prefs.model;
   // Best is admin-only; anyone else falls back to Standard.
   const quality = prefs.quality === 'high' && !useAccount.getState().admin ? 'medium' : prefs.quality;
@@ -448,7 +450,7 @@ async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: 
   const src = region ? cropCanvas(source, region) : source;
   const m = region ? cropCanvas(mask, region) : mask;
 
-  const inputs = await buildEditInputs(src, m, model, quality, params.mode === 'clear', params.mode === 'apply');
+  const inputs = await buildEditInputs(src, m, model, quality, params.mode === 'clear', params.mode === 'apply' || params.mode === 'touchup');
   editAbort = new AbortController();
   let resultBlob: Blob;
   try {
@@ -458,7 +460,7 @@ async function runMaskedEdit(source: Drawable, mask: HTMLCanvasElement, params: 
   }
   const ai = { model, quality };
   const result = await blobToImage(resultBlob);
-  const patch = compositeEdit(src, result, m, params.mode === 'clear');
+  const patch = compositeEdit(src, result, m, params.mode === 'clear' || params.mode === 'touchup');
   if (!region) return { blob: await toBlob(patch, 'image/jpeg', 0.93), ai };
 
   const out = makeCanvas(W, H);
@@ -504,14 +506,16 @@ export async function runEdit(params: EditParams, reference?: Blob) {
 }
 
 /**
- * Final touches: no AI, so nothing in the room can change. Finds everything
- * edited since the original photo, sharpens it to the original's crispness
- * and gives it the photo's grain. Saved as its own version.
+ * Final touches: an AI clean-up of only the thin strips along the borders of
+ * everything edited since the original photo, with any strip it changed too
+ * much put back; then the edits are sharpened and given the photo's grain.
+ * Saved as its own version.
  */
 export async function finalTouches() {
   const { base, project, busy: isBusy, urls } = get();
   if (!base || !project || isBusy) return;
-  busy('Adding final touches');
+  busy('Cleaning up edges', true);
+  reveal('.stage-wrap');
   try {
     const original = await loadImage(urls[project.versions[0].id]);
     const edited = editedRegions(original, base);
@@ -519,18 +523,23 @@ export async function finalTouches() {
       toast('Nothing has been edited yet, so there’s nothing to touch up.');
       return;
     }
-    const sharp = matchDetail(base, edited.region, edited.core);
-    const done = matchGrain(sharp ?? base, edited.region, edited.core);
-    if (!sharp && !done) {
-      toast('Your edits already match the photo’s sharpness, so nothing needed touching up.');
-      return;
-    }
-    await commitVersion(await toBlob((done ?? sharp)!, 'image/jpeg', 0.95), 'Final touches');
-    toast('Final touches added. Compare with the history strip, or undo.', 'success');
+    const { blob, ai } = await runMaskedEdit(base, edited.seams, { mode: 'touchup' });
+    const safe = limitChanges(base, await blobToImage(blob), edited.seams);
+    let out: HTMLCanvasElement = safe.canvas;
+    out = matchDetail(out, edited.region, edited.core) ?? out;
+    out = matchGrain(out, edited.region, edited.core) ?? out;
+    await commitVersion(await toBlob(out, 'image/jpeg', 0.95), 'Final touches', undefined, ai);
+    toast(
+      safe.reverted
+        ? `Edges cleaned up. ${safe.reverted} spot${safe.reverted === 1 ? ' was' : 's were'} left as before because the AI changed too much there.`
+        : 'Edges cleaned up. Compare with the history strip, or undo.',
+      'success',
+    );
   } catch (e) {
-    toast((e as Error).message, 'error');
+    editFailed(e);
   } finally {
     set({ busy: null });
+    refreshAccount();
   }
 }
 
