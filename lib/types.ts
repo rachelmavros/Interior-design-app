@@ -42,6 +42,8 @@ export interface AppConfig {
   mock: boolean;
   accessRequired: boolean;
   missing: string[];
+  /** Which engine Final touches uses: Gemini when its key is set, otherwise OpenAI on edge strips. */
+  touchup: 'gemini' | 'openai';
 }
 
 export interface Box {

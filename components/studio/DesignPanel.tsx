@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { getConfig } from '@/lib/client/api';
 import { IconBrush, IconInfoCircle, IconPencil, IconSparkles, IconWand } from '@tabler/icons-react';
 import { finalTouches, runEdit, setAiMode, toast, useStudio } from '@/lib/client/studio';
 import { AiSettings, useEditCost } from './AiSettings';
@@ -19,7 +20,13 @@ const MODES: { id: Mode; label: string }[] = [
 export function DesignPanel() {
   const coverage = useStudio((s) => s.maskCoverage);
   const cost = useEditCost();
-  const touchCost = useEditCost('clear');
+  const openaiTouchCost = useEditCost('clear');
+  const [gemini, setGemini] = useState(false);
+  useEffect(() => {
+    getConfig().then((c) => setGemini(c.touchup === 'gemini'));
+  }, []);
+  // Gemini image edits are about 4¢ each (Google's list price).
+  const touchCost = gemini ? '~4¢' : openaiTouchCost;
   const edited = useStudio((s) => (s.project?.current ?? 0) > 0);
   const busy = useStudio((s) => s.busy);
   const tool = useStudio((s) => s.tool);
@@ -232,8 +239,8 @@ export function DesignPanel() {
               <IconSparkles size={16} /> Final touches
             </strong>
             <span className="tiny muted">
-              Done designing? AI cleans up fuzzy borders around everything you added, working only on thin strips along each edge.
-              Any spot it changes too much is put back as it was. Saved as a new version you can undo.
+              Done designing? AI cleans up fuzzy borders around everything you added, without changing what’s in the room. Any
+              spot it changes too much is put back as it was. Saved as a new version you can undo.
             </span>
           </div>
           <button className="btn btn-outline btn-block" onClick={finalTouches} disabled={!!busy}>

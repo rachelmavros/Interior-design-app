@@ -71,6 +71,11 @@ Task: edge clean-up only. The masked strips run along the borders of things alre
 - Keep every object and material exactly as it is: same outline position, pattern, color and size. Never remove, add, move, resize or restyle anything, and never swap one material for another.
 - Match the photo's sharpness, grain and lighting.`;
 
+/** Final touches with an instruction-following editor (Gemini): the whole photo, nothing else changes. */
+export const TOUCHUP_WHOLE = `This is a finished interior design photo. Some pieces in it were added or changed with AI, such as a rug, a wall finish or furniture, and their edges can look fuzzy, smeared or haloed where they meet the rest of the room.
+Polish the photo: make every edge as crisp and clean as a real photograph, remove blur, smearing, halos, ghosting and soft fade bands around added items, and give them the same sharpness, texture and grain as the rest of the photo.
+Do not change anything else. Keep every piece of furniture, decor, rug, wall, window, door, the view outside, the colors, the lighting, the layout, the framing and the camera angle exactly the same. Do not add, remove, move, resize or restyle anything. Return the same photo, only cleaner.`;
+
 export function buildPrompt(p: EditParams): string {
   switch (p.mode) {
     case 'clear':

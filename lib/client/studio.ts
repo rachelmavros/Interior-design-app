@@ -1,9 +1,10 @@
 'use client';
 
 import { create } from 'zustand';
-import { designEdit, getConfig, lensSearch } from './api';
+import { designEdit, geminiTouchup, getConfig, lensSearch } from './api';
 import { accountsOn, refreshAccount, signIn, useAccount } from './account';
 import {
+  alignResult,
   blobToImage,
   anyChangeAlpha,
   buildEditInputs,
@@ -506,10 +507,12 @@ export async function runEdit(params: EditParams, reference?: Blob) {
 }
 
 /**
- * Final touches: an AI clean-up of only the thin strips along the borders of
- * everything edited since the original photo, with any strip it changed too
- * much put back; then the edits are sharpened and given the photo's grain.
- * Saved as its own version.
+ * Final touches. With Gemini (an instruction-following editor) the whole
+ * photo goes in with a "clean up, change nothing" request, and only the
+ * edited areas take its version, so the rest keeps full quality. Without it,
+ * OpenAI cleans thin strips along the edit borders. Either way, any spot the
+ * AI changed too much is put back, then the edits are sharpened and given
+ * the photo's grain. Saved as its own version.
  */
 export async function finalTouches() {
   const { base, project, busy: isBusy, urls } = get();
@@ -523,8 +526,32 @@ export async function finalTouches() {
       toast('Nothing has been edited yet, so there’s nothing to touch up.');
       return;
     }
-    const { blob, ai } = await runMaskedEdit(base, edited.seams, { mode: 'touchup' });
-    const safe = limitChanges(base, await blobToImage(blob), edited.seams);
+    let safe: ReturnType<typeof limitChanges>;
+    let ai: Version['ai'];
+    if ((await getConfig()).touchup === 'gemini') {
+      const { W, H } = dims(base);
+      const s = Math.min(1, 2048 / Math.max(W, H));
+      const send = makeCanvas(W * s, H * s);
+      const gs = ctx2d(send);
+      gs.imageSmoothingQuality = 'high';
+      gs.drawImage(base, 0, 0, send.width, send.height);
+      editAbort = new AbortController();
+      let cleaned: Blob;
+      try {
+        cleaned = await geminiTouchup(await toBlob(send, 'image/jpeg', 0.92), editAbort.signal);
+      } finally {
+        editAbort = null;
+      }
+      // Only the edited areas take Gemini's copy; everything else stays the full-quality original.
+      const aligned = alignResult(base, await blobToImage(cleaned), edited.region);
+      const merged = compositeEdit(base, aligned, edited.region, true);
+      safe = limitChanges(base, merged, edited.region);
+      ai = { model: 'gemini', quality: 'medium' };
+    } else {
+      const res = await runMaskedEdit(base, edited.seams, { mode: 'touchup' });
+      safe = limitChanges(base, await blobToImage(res.blob), edited.seams);
+      ai = res.ai;
+    }
     let out: HTMLCanvasElement = safe.canvas;
     out = matchDetail(out, edited.region, edited.core) ?? out;
     out = matchGrain(out, edited.region, edited.core) ?? out;
