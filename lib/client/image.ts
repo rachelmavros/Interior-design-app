@@ -385,17 +385,17 @@ export async function buildEditInputs(
  * untouched pixels around the paste, spread it smoothly inward, and return
  * the per-pixel RGB offset to add to the result inside `box`.
  */
-function seamCorrection(base: Drawable, result: Drawable, alpha: Float32Array, W: number, box: Box) {
+function seamCorrection(base: Drawable, result: Drawable, changed: Float32Array, W: number, box: Box) {
   const { gw, gh } = gridSize(box.w, box.h);
   const b = shrink(base, box.x, box.y, box.w, box.h, gw, gh);
   const r = shrink(result, box.x, box.y, box.w, box.h, gw, gh);
 
-  // A grid cell is "known" only if no part of it gets pasted.
+  // A grid cell is "known" only if none of it is in `changed`.
   const inside = new Uint8Array(gw * gh);
   for (let y = 0; y < box.h; y++) {
     const gy = Math.min(gh - 1, Math.floor((y * gh) / box.h));
     for (let x = 0; x < box.w; x++) {
-      if (alpha[(box.y + y) * W + box.x + x] > 0) inside[gy * gw + Math.min(gw - 1, Math.floor((x * gw) / box.w))] = 1;
+      if (changed[(box.y + y) * W + box.x + x] > 0) inside[gy * gw + Math.min(gw - 1, Math.floor((x * gw) / box.w))] = 1;
     }
   }
   const known = inside.map((v) => 1 - v);
@@ -421,8 +421,15 @@ function seamCorrection(base: Drawable, result: Drawable, alpha: Float32Array, W
   return gb.getImageData(0, 0, box.w, box.h).data;
 }
 
-/** Pastes the generated pixels back over the original, only inside the user's mask (feathered). */
-export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HTMLCanvasElement) {
+/**
+ * Pastes the generated pixels back over the original, only inside the user's
+ * mask (feathered). `sameSurface` (Clear out) matches the edge to the
+ * untouched pixels right beside it. For edits that put something new there
+ * (a piece, a brick wall) that would pull the new look back toward the old
+ * one, so only the model's overall color drift, measured beyond everything
+ * it was allowed to repaint, is corrected.
+ */
+export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HTMLCanvasElement, sameSurface = true) {
   const { W, H } = dims(base);
   const { grow, feather } = edgeRadii(W, H);
 
@@ -451,11 +458,12 @@ export function compositeEdit(base: Drawable, result: HTMLImageElement, mask: HT
   if (x1 < 0) return out;
 
   // Measure the drift on a band of untouched pixels around the paste.
-  const pad = feather * 4;
+  const pad = feather * (sameSurface ? 4 : 6);
   const bx = Math.max(0, x0 - pad);
   const by = Math.max(0, y0 - pad);
   const box = { x: bx, y: by, w: Math.min(W, x1 + pad + 1) - bx, h: Math.min(H, y1 + pad + 1) - by };
-  const fix = seamCorrection(out, layer, alpha, W, box);
+  const changed = sameSurface ? alpha : dilate(readAlpha(mask), W, H, grow + feather * 2);
+  const fix = seamCorrection(out, layer, changed, W, box);
 
   for (let y = 0; y < box.h; y++) {
     for (let x = 0; x < box.w; x++) {

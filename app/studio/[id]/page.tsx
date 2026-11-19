@@ -17,11 +17,10 @@ import { SelectedSticker } from '@/components/studio/SelectedSticker';
 import {
   flushSave,
   loadStudio,
-  redo,
+  redoAny,
   removeSticker,
   renameProject,
-  undo,
-  undoMask,
+  undoAny,
   unloadStudio,
   useStudio,
   visibleItems,
@@ -56,9 +55,8 @@ export default function StudioPage() {
         removeSticker(selected);
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
-        if (e.shiftKey) redo();
-        else if (['brush', 'eraser', 'rect', 'lasso'].includes(tool) && useStudio.getState().maskHistory.length) undoMask();
-        else undo();
+        if (e.shiftKey) redoAny();
+        else undoAny();
       } else if (e.key === 'Escape') {
         useStudio.setState({ selected: null, compare: false });
       }
